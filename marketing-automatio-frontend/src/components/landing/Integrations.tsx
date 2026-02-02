@@ -27,23 +27,20 @@ export const Integrations = () => {
           {platforms.map((platform) => (
             <div
               key={platform.name}
-              className="bg-white rounded-2xl p-6 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 flex flex-col items-center justify-center text-center group"
+              className="group relative rounded-2xl border border-white/60 bg-white/80 p-6 shadow-md backdrop-blur transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl"
             >
+              <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary-400/0 via-purple-400/0 to-pink-400/0 opacity-0 transition-opacity duration-300 group-hover:opacity-10"></div>
               <platform.Icon
                 className={`text-5xl mb-3 ${platform.color} transition-transform duration-300 group-hover:scale-110`}
                 aria-hidden="true"
               />
-              <h3 className="font-semibold text-gray-900">{platform.name}</h3>
+             
             </div>
           ))}
         </div>
 
-        {/* Bottom CTA */}
-        <div className="text-center mt-12">
-          <p className="text-gray-600">
-            + More platforms added every month
-          </p>
-        </div>
+       
+      
       </Container>
     </section>
   );
