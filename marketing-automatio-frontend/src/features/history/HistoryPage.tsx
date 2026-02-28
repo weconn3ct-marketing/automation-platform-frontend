@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sidebar } from '../../components/Sidebar';
 import { Header } from '../../components/Header';
 import { Card } from '../../components/ui/Card';
@@ -11,8 +11,11 @@ import {
   Download,
   Eye,
   Calendar as CalendarIcon,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Loader2,
 } from 'lucide-react';
+import { usePostsStore } from '../../store/postsStore';
+import type { Post } from '../../types';
 
 type Platform = 'instagram' | 'linkedin' | 'facebook' | 'all';
 type Status = 'success' | 'failed' | 'all';
@@ -25,7 +28,7 @@ interface PostHistory {
   content: string;
   dateTime: Date;
   mediaUrls: string[];
-  mediaSizes: number[]; // in MB
+  mediaSizes: number[];
   engagement?: {
     likes: number;
     comments: number;
@@ -35,90 +38,49 @@ interface PostHistory {
   postUrl?: string;
 }
 
-const mockPosts: PostHistory[] = [
-  {
-    id: '1',
-    platform: 'linkedin',
-    status: 'success',
-    title: 'Product Launch Announcement',
-    content: 'Excited to announce our new product launch! 🚀 This revolutionary tool will transform how you manage social media...',
-    dateTime: new Date(2026, 1, 1, 14, 0),
-    mediaUrls: ['https://via.placeholder.com/400x300/4F46E5/ffffff?text=Product+Launch'],
-    mediaSizes: [2.3],
-    engagement: { likes: 245, comments: 32, shares: 18 },
-    postUrl: 'https://linkedin.com/post/123',
-  },
-  {
-    id: '2',
-    platform: 'instagram',
-    status: 'success',
-    title: 'Behind the Scenes',
-    content: 'Take a peek behind the scenes of our creative process 🎨 #BehindTheScenes #TeamWork',
-    dateTime: new Date(2026, 1, 2, 9, 30),
-    mediaUrls: [
-      'https://via.placeholder.com/400x400/EC4899/ffffff?text=Image+1',
-      'https://via.placeholder.com/400x400/8B5CF6/ffffff?text=Image+2',
-      'https://via.placeholder.com/400x400/F59E0B/ffffff?text=Image+3'
-    ],
-    mediaSizes: [1.8, 2.1, 1.9],
-    engagement: { likes: 892, comments: 67, shares: 43 },
-    postUrl: 'https://instagram.com/p/123',
-  },
-  {
-    id: '3',
-    platform: 'linkedin',
-    status: 'failed',
-    title: 'Weekly Industry Insights',
-    content: 'This week in tech: AI advancements, market trends, and what it means for your business...',
-    dateTime: new Date(2026, 1, 2, 11, 0),
-    mediaUrls: ['https://via.placeholder.com/400x300/EF4444/ffffff?text=Failed+Upload'],
-    mediaSizes: [9.2],
-    errorMessage: 'Image size exceeds 8MB limit. Upload failed.',
-  },
-  {
-    id: '4',
-    platform: 'facebook',
-    status: 'success',
-    title: 'Customer Success Story',
-    content: 'Hear how our client increased their engagement by 300% using our platform! 📈',
-    dateTime: new Date(2026, 1, 1, 16, 45),
-    mediaUrls: ['https://via.placeholder.com/400x300/10B981/ffffff?text=Success+Story'],
-    mediaSizes: [3.1],
-    engagement: { likes: 456, comments: 89, shares: 234 },
-    postUrl: 'https://facebook.com/post/123',
-  },
-  {
-    id: '5',
-    platform: 'instagram',
-    status: 'success',
-    title: 'Product Tutorial',
-    content: 'Quick tutorial on how to get started with our platform in under 5 minutes! ⚡ #Tutorial #HowTo',
-    dateTime: new Date(2026, 0, 31, 10, 15),
-    mediaUrls: ['https://via.placeholder.com/400x400/6366F1/ffffff?text=Tutorial'],
-    mediaSizes: [4.5],
-    engagement: { likes: 1203, comments: 145, shares: 78 },
-    postUrl: 'https://instagram.com/p/456',
-  },
-  {
-    id: '6',
-    platform: 'linkedin',
-    status: 'failed',
-    title: 'Quarterly Report',
-    content: 'Q4 2025 Results: Record-breaking growth and exciting plans for 2026...',
-    dateTime: new Date(2026, 0, 30, 14, 30),
-    mediaUrls: [],
+function mapPostToHistory(post: Post): PostHistory {
+  const primaryPlatform = post.platforms[0] || 'instagram';
+  const platform = (['instagram', 'linkedin', 'facebook'].includes(primaryPlatform)
+    ? primaryPlatform
+    : 'instagram') as 'instagram' | 'linkedin' | 'facebook';
+  const status: 'success' | 'failed' = post.status === 'failed' ? 'failed' : 'success';
+  const dateTime = new Date(post.publishedAt || post.updatedAt || post.createdAt);
+  return {
+    id: post.id,
+    platform,
+    status,
+    title: post.title,
+    content: post.content,
+    dateTime,
+    mediaUrls: post.imageUrls || [],
     mediaSizes: [],
-    errorMessage: 'API authentication failed. Please reconnect your LinkedIn account.',
-  },
-];
+    engagement: undefined,
+    errorMessage: post.status === 'failed'
+      ? 'Publishing failed. Please check your platform connection and retry.'
+      : undefined,
+    postUrl: undefined,
+  };
+}
 
 export const HistoryPage = () => {
-  const [posts] = useState<PostHistory[]>(mockPosts);
+  const { posts: rawPosts, fetchPosts, isLoading } = usePostsStore();
+  const [posts, setPosts] = useState<PostHistory[]>([]);
   const [platformFilter, setPlatformFilter] = useState<Platform>('all');
   const [statusFilter, setStatusFilter] = useState<Status>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState('');
   const [selectedPost, setSelectedPost] = useState<PostHistory | null>(null);
+
+  useEffect(() => {
+    fetchPosts({ limit: 100 });
+  }, [fetchPosts]);
+
+  useEffect(() => {
+    const historyPosts = rawPosts
+      .filter(p => p.status === 'published' || p.status === 'failed')
+      .map(mapPostToHistory);
+    setPosts(historyPosts);
+  }, [rawPosts]);
 
   const filteredPosts = posts.filter(post => {
     const matchesPlatform = platformFilter === 'all' || post.platform === platformFilter;
@@ -172,6 +134,13 @@ export const HistoryPage = () => {
         />
         
         <main className="flex-1 p-8">
+          {/* Loading */}
+          {isLoading && (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 size={32} className="animate-spin text-indigo-600" />
+              <span className="ml-3 text-gray-600 font-medium">Loading post history...</span>
+            </div>
+          )}
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
             <Card className="p-6">

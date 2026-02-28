@@ -1,58 +1,36 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sidebar } from '../../components/Sidebar';
 import { Header } from '../../components/Header';
 import { Card } from '../../components/ui/Card';
-import { 
-  CheckCircle2, 
-  XCircle, 
+import {
+  CheckCircle2,
+  XCircle,
   Plus,
   Link2,
   RefreshCw,
   Trash2,
+  Loader2,
 } from 'lucide-react';
+import { useConnectionsStore } from '../../store/connectionsStore';
+import type { Platform } from '../../types';
 
-type Platform = 'instagram' | 'linkedin' | 'facebook';
-type ConnectionStatus = 'connected' | 'disconnected' | 'error';
+type BasicPlatform = 'instagram' | 'linkedin' | 'facebook';
 
-interface Connection {
-  id: string;
-  platform: Platform;
-  status: ConnectionStatus;
-  accountName?: string;
-  accountId?: string;
-  connectedAt?: Date;
-  lastSync?: Date;
-  accessToken?: string;
-  expiresAt?: Date;
-  errorMessage?: string;
-}
 
-const mockConnections: Connection[] = [
-  {
-    id: '1',
-    platform: 'instagram',
-    status: 'connected',
-    accountName: '@socialflow_official',
-    accountId: 'IG-123456789',
-    connectedAt: new Date(2026, 0, 15),
-    lastSync: new Date(2026, 1, 2, 10, 30),
-    expiresAt: new Date(2026, 2, 15),
-  },
-  {
-    id: '2',
-    platform: 'linkedin',
-    status: 'error',
-    accountName: 'SocialFlow Company',
-    accountId: 'LI-987654321',
-    connectedAt: new Date(2026, 0, 10),
-    lastSync: new Date(2026, 1, 1),
-    expiresAt: new Date(2026, 0, 31),
-    errorMessage: 'Access token expired. Please reconnect your account.',
-  },
-];
 
 export const AccountsPage = () => {
-  const [connections, setConnections] = useState<Connection[]>(mockConnections);
+  const {
+    connections,
+    isLoading,
+    fetchConnections,
+    createConnection,
+    removeConnection,
+    reconnect,
+  } = useConnectionsStore();
+
+  useEffect(() => {
+    fetchConnections();
+  }, [fetchConnections]);
   // const [showAddModal, setShowAddModal] = useState(false);
   // const [selectedPlatform, setSelectedPlatform] = useState<Platform | null>(null);
   const [showInstagramForm, setShowInstagramForm] = useState(false);
@@ -67,14 +45,15 @@ export const AccountsPage = () => {
     accessToken: '',
   });
 
-  // LinkedIn Form State
-  const [linkedInForm, setLinkedInForm] = useState({
+  // LinkedIn Form State (reserved for future LinkedIn OAuth flow)
+  const [linkedInForm] = useState({
     clientId: '',
     clientSecret: '',
     redirectUri: '',
     organizationId: '',
     accessToken: '',
   });
+  void linkedInForm; // suppress unused warning until LinkedIn flow is implemented
 
   const platformInfo = {
     instagram: {
@@ -108,46 +87,45 @@ export const AccountsPage = () => {
     // setSelectedPlatform(platform);
     if (platform === 'instagram') {
       setShowInstagramForm(true);
-    // } else if (platform === 'linkedin') {
-    //   setShowLinkedInForm(true);
+      // } else if (platform === 'linkedin') {
+      //   setShowLinkedInForm(true);
     }
   };
 
-  const handleDisconnect = (connectionId: string) => {
+  const handleDisconnect = async (connectionId: string) => {
     if (confirm('Are you sure you want to disconnect this account?')) {
-      setConnections(connections.filter(c => c.id !== connectionId));
+      await removeConnection(connectionId);
     }
   };
 
-  const handleReconnect = (connectionId: string) => {
+  const handleReconnect = async (connectionId: string) => {
     const connection = connections.find(c => c.id === connectionId);
     if (connection) {
-      handleConnectPlatform(connection.platform);
+      if (connection.status === 'error') {
+        await reconnect(connectionId);
+      } else {
+        handleConnectPlatform(connection.platform as Platform);
+      }
     }
   };
 
-  const handleInstagramSubmit = () => {
-    // Simulate OAuth connection
-    const newConnection: Connection = {
-      id: Date.now().toString(),
-      platform: 'instagram',
-      status: 'connected',
-      accountName: '@your_account',
-      accountId: instagramForm.businessAccountId,
-      connectedAt: new Date(),
-      lastSync: new Date(),
-      expiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000), // 60 days
-    };
-
-    setConnections([...connections.filter(c => c.platform !== 'instagram'), newConnection]);
-    setShowInstagramForm(false);
-    setInstagramForm({
-      appId: '',
-      appSecret: '',
-      businessAccountId: '',
-      facebookPageId: '',
-      accessToken: '',
-    });
+  const handleInstagramSubmit = async () => {
+    try {
+      await createConnection({
+        platform: 'instagram',
+        accountName: '@your_account',
+        accountId: instagramForm.businessAccountId,
+        appId: instagramForm.appId,
+        appSecret: instagramForm.appSecret,
+        businessAccountId: instagramForm.businessAccountId,
+        facebookPageId: instagramForm.facebookPageId,
+        accessToken: instagramForm.accessToken,
+      });
+      setShowInstagramForm(false);
+      setInstagramForm({ appId: '', appSecret: '', businessAccountId: '', facebookPageId: '', accessToken: '' });
+    } catch (err) {
+      console.error('Failed to connect Instagram:', err);
+    }
   };
 
   // const handleLinkedInSubmit = () => {
@@ -183,20 +161,26 @@ export const AccountsPage = () => {
 
   return (
     <div className="flex min-h-screen bg-gray-50">
+      {isLoading && (
+        <div className="fixed top-4 right-4 z-50 bg-white shadow-lg rounded-lg px-4 py-2 flex items-center gap-2 text-sm text-gray-600">
+          <Loader2 size={16} className="animate-spin text-indigo-600" />
+          Syncing...
+        </div>
+      )}
       <Sidebar />
-      
+
       <div className="flex-1 flex flex-col">
-        <Header 
-          title="Connected Accounts" 
+        <Header
+          title="Connected Accounts"
           subtitle="Manage your social media integrations and API credentials"
         />
-        
+
         <main className="flex-1 p-8">
           {/* Overview Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            {(['instagram', 'linkedin', 'facebook'] as Platform[]).map(platform => {
-              const connection = getConnection(platform);
-              const info = platformInfo[platform];
+            {(['instagram', 'linkedin', 'facebook'] as BasicPlatform[]).map(platform => {
+              const connection = getConnection(platform as Platform);
+              const info = platformInfo[platform as BasicPlatform];
 
               return (
                 <Card key={platform} className={`p-6 ${info.bgColor} border ${info.borderColor}`}>
@@ -240,14 +224,14 @@ export const AccountsPage = () => {
                         {connection.lastSync && (
                           <p className="mb-1">
                             <span className="font-medium">Last Sync:</span>{' '}
-                            {connection.lastSync.toLocaleString()}
+                            {new Date(connection.lastSync).toLocaleString()}
                           </p>
                         )}
                         {connection.expiresAt && (
                           <p className="mb-1">
                             <span className="font-medium">Expires in:</span>{' '}
-                            <span className={getDaysUntilExpiry(connection.expiresAt)! < 7 ? 'text-red-600 font-semibold' : ''}>
-                              {getDaysUntilExpiry(connection.expiresAt)} days
+                            <span className={getDaysUntilExpiry(new Date(connection.expiresAt))! < 7 ? 'text-red-600 font-semibold' : ''}>
+                              {getDaysUntilExpiry(new Date(connection.expiresAt))} days
                             </span>
                           </p>
                         )}
@@ -299,7 +283,7 @@ export const AccountsPage = () => {
             })}
           </div>
 
-          
+
 
           {/* Instagram Connection Form Modal */}
           {showInstagramForm && (
@@ -436,9 +420,9 @@ export const AccountsPage = () => {
             </div>
           )}
 
-          
-            
-          
+
+
+
         </main>
       </div>
     </div>

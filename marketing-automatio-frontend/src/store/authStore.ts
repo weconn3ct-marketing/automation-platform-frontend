@@ -2,14 +2,15 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { User, AuthState, LoginCredentials, SignupCredentials } from '../types';
 import { authStorage } from '../lib/storage';
+import { api } from '../services/apiClient';
 
 interface AuthStore extends AuthState {
   login: (credentials: LoginCredentials) => Promise<void>;
   signup: (credentials: SignupCredentials) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   setUser: (user: User | null) => void;
   setToken: (token: string | null) => void;
-  checkAuth: () => void;
+  checkAuth: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthStore>()(
@@ -23,26 +24,21 @@ export const useAuthStore = create<AuthStore>()(
       login: async (credentials: LoginCredentials) => {
         set({ isLoading: true });
         try {
-          // TODO: Replace with actual API call
-          // const response = await api.post('/auth/login', credentials);
-          
-          // Mock successful login
-          const mockUser: User = {
-            id: '1',
-            email: credentials.email,
-            firstName: 'John',
-            lastName: 'Doe',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          };
-          const mockToken = 'mock-jwt-token';
+          const response = await api.post<{ user: User; token: string; refreshToken: string }>(
+            '/auth/login',
+            credentials
+          );
 
-          authStorage.setToken(mockToken);
-          authStorage.setUser(mockUser);
+          const { user, token, refreshToken } = response.data;
+
+          authStorage.setToken(token);
+          authStorage.setUser(user);
+          // Store refresh token for later rotation
+          localStorage.setItem('refresh_token', refreshToken);
 
           set({
-            user: mockUser,
-            token: mockToken,
+            user,
+            token,
             isAuthenticated: true,
             isLoading: false,
           });
@@ -55,26 +51,20 @@ export const useAuthStore = create<AuthStore>()(
       signup: async (credentials: SignupCredentials) => {
         set({ isLoading: true });
         try {
-          // TODO: Replace with actual API call
-          // const response = await api.post('/auth/signup', credentials);
-          
-          // Mock successful signup
-          const mockUser: User = {
-            id: '1',
-            email: credentials.email,
-            firstName: credentials.firstName,
-            lastName: credentials.lastName,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          };
-          const mockToken = 'mock-jwt-token';
+          const response = await api.post<{ user: User; token: string; refreshToken: string }>(
+            '/auth/signup',
+            credentials
+          );
 
-          authStorage.setToken(mockToken);
-          authStorage.setUser(mockUser);
+          const { user, token, refreshToken } = response.data;
+
+          authStorage.setToken(token);
+          authStorage.setUser(user);
+          localStorage.setItem('refresh_token', refreshToken);
 
           set({
-            user: mockUser,
-            token: mockToken,
+            user,
+            token,
             isAuthenticated: true,
             isLoading: false,
           });
@@ -84,45 +74,54 @@ export const useAuthStore = create<AuthStore>()(
         }
       },
 
-      logout: () => {
-        authStorage.clearAuth();
-        set({
-          user: null,
-          token: null,
-          isAuthenticated: false,
-        });
-      },
-
-      setUser: (user: User | null) => {
-        set({ user });
-        if (user) {
-          authStorage.setUser(user);
-        }
-      },
-
-      setToken: (token: string | null) => {
-        set({ token });
-        if (token) {
-          authStorage.setToken(token);
-        }
-      },
-
-      checkAuth: () => {
-        const token = authStorage.getToken();
-        const user = authStorage.getUser();
-
-        if (token && user) {
-          set({
-            user: user as User,
-            token,
-            isAuthenticated: true,
-          });
-        } else {
+      logout: async () => {
+        try {
+          const refreshToken = localStorage.getItem('refresh_token');
+          if (refreshToken) {
+            // Revoke the refresh token server-side (best-effort)
+            await api.post('/auth/logout', { refreshToken }).catch(() => { });
+          }
+        } finally {
+          authStorage.clearAuth();
+          localStorage.removeItem('refresh_token');
           set({
             user: null,
             token: null,
             isAuthenticated: false,
           });
+        }
+      },
+
+      setUser: (user: User | null) => {
+        set({ user });
+        if (user) authStorage.setUser(user);
+      },
+
+      setToken: (token: string | null) => {
+        set({ token });
+        if (token) authStorage.setToken(token);
+      },
+
+      checkAuth: async () => {
+        const token = authStorage.getToken();
+        if (!token) {
+          set({ user: null, token: null, isAuthenticated: false });
+          return;
+        }
+        try {
+          // Validate token against the server and get fresh user data
+          const response = await api.get<User>('/auth/me');
+          set({
+            user: response.data,
+            token,
+            isAuthenticated: true,
+          });
+          authStorage.setUser(response.data);
+        } catch {
+          // Token is invalid/expired — clear auth
+          authStorage.clearAuth();
+          localStorage.removeItem('refresh_token');
+          set({ user: null, token: null, isAuthenticated: false });
         }
       },
     }),

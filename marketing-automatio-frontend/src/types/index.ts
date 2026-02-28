@@ -104,6 +104,8 @@ export interface CreatePostInput {
   tone: ToneStyle;
   imagePrompt?: string;
   scheduledAt?: string;
+  title?: string;
+  content?: string;
 }
 
 // API Response types
@@ -134,8 +136,10 @@ export interface PaginatedResponse<T> {
 export interface DashboardMetrics {
   scheduledPosts: number;
   pendingApprovals: number;
+  publishedPosts: number;
+  connectedAccounts: number;
   totalReach: string;
-  engagementRate?: string;
+  engagementRate: string;
 }
 
 export interface AnalyticsData {

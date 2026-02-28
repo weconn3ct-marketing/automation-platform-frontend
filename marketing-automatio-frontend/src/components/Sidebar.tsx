@@ -82,7 +82,7 @@ export const Sidebar = () => {
       <div className="p-4 border-t border-gray-100 space-y-2">
         {/* Settings */}
         <button
-          onClick={() => navigate('/settings')}
+          onClick={() => navigate('/dashboard/accounts')}
           className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all duration-200"
         >
           <Settings size={18} />

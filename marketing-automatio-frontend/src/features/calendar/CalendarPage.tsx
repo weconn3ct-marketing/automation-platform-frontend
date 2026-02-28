@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sidebar } from '../../components/Sidebar';
 import { Header } from '../../components/Header';
 import { Card } from '../../components/ui/Card';
@@ -11,8 +11,11 @@ import {
   Hand,
   AlertTriangle,
   Calendar as CalendarIcon,
-  Repeat
+  Repeat,
+  Loader2,
 } from 'lucide-react';
+import { usePostsStore } from '../../store/postsStore';
+import type { Post } from '../../types';
 
 type TriggerType = 'manual' | 'scheduled' | 'webhook';
 type RecurrenceType = 'once' | 'daily' | 'weekly' | 'custom';
@@ -34,39 +37,43 @@ const POSTING_LIMITS = {
   facebook: { max: 4, label: '4 posts/day' },
 };
 
+function mapPostToScheduled(post: Post): ScheduledPost {
+  const primaryPlatform = post.platforms[0] || 'instagram';
+  const platform = (['instagram', 'linkedin', 'facebook'].includes(primaryPlatform)
+    ? primaryPlatform
+    : 'instagram') as Platform;
+  const scheduledDate = post.scheduledAt ? new Date(post.scheduledAt) : new Date(post.createdAt);
+  const time = scheduledDate.toTimeString().slice(0, 5);
+  return {
+    id: post.id,
+    title: post.title,
+    date: scheduledDate,
+    time,
+    platform,
+    triggerType: 'scheduled',
+    recurrence: 'once',
+  };
+}
+
 export const CalendarPage = () => {
+  const { posts: rawPosts, fetchPosts, createPost, isLoading } = usePostsStore();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([
-    {
-      id: '1',
-      title: 'Product Launch Announcement',
-      date: new Date(2026, 1, 5),
-      time: '14:00',
-      platform: 'linkedin',
-      triggerType: 'scheduled',
-      recurrence: 'once',
-    },
-    {
-      id: '2',
-      title: 'Behind the Scenes Content',
-      date: new Date(2026, 1, 6),
-      time: '09:00',
-      platform: 'instagram',
-      triggerType: 'scheduled',
-      recurrence: 'once',
-    },
-    {
-      id: '3',
-      title: 'Weekly Industry Insights',
-      date: new Date(2026, 1, 7),
-      time: '11:00',
-      platform: 'linkedin',
-      triggerType: 'scheduled',
-      recurrence: 'weekly',
-    },
-  ]);
+  const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([]);
+
+  // Fetch scheduled posts from the API on mount
+  useEffect(() => {
+    fetchPosts({ status: 'scheduled', limit: 100 });
+  }, [fetchPosts]);
+
+  // Map API posts to ScheduledPost format
+  useEffect(() => {
+    const mapped = rawPosts
+      .filter(p => p.status === 'scheduled')
+      .map(mapPostToScheduled);
+    setScheduledPosts(mapped);
+  }, [rawPosts]);
 
   // Form state for new post
   const [newPost, setNewPost] = useState({
@@ -130,30 +137,35 @@ export const CalendarPage = () => {
     );
   };
 
-  const handleAddPost = () => {
+  const handleAddPost = async () => {
     if (!newPost.title || !newPost.date || !newPost.time) return;
 
-    const post: ScheduledPost = {
-      id: Date.now().toString(),
-      title: newPost.title,
-      date: new Date(newPost.date),
-      time: newPost.time,
-      platform: newPost.platform,
-      triggerType: newPost.triggerType,
-      recurrence: newPost.recurrence,
-    };
+    const scheduledAt = `${newPost.date}T${newPost.time}:00`;
 
-    setScheduledPosts([...scheduledPosts, post]);
-    setShowAddModal(false);
-    setNewPost({
-      title: '',
-      date: '',
-      time: '',
-      platform: 'instagram',
-      triggerType: 'scheduled',
-      recurrence: 'once',
-      customFrequency: '3',
-    });
+    try {
+      await createPost({
+        topic: newPost.title,
+        title: newPost.title,
+        platforms: [newPost.platform],
+        contentType: 'text',
+        tone: 'professional',
+        scheduledAt,
+      });
+      setShowAddModal(false);
+      setNewPost({
+        title: '',
+        date: '',
+        time: '',
+        platform: 'instagram',
+        triggerType: 'scheduled',
+        recurrence: 'once',
+        customFrequency: '3',
+      });
+      // Refresh scheduled posts
+      fetchPosts({ status: 'scheduled', limit: 100 });
+    } catch (err) {
+      console.error('Failed to schedule post:', err);
+    }
   };
 
   const monthNames = [
@@ -475,9 +487,10 @@ export const CalendarPage = () => {
                     </button>
                     <button
                       onClick={handleAddPost}
-                      disabled={!newPost.title || !newPost.date || !newPost.time}
-                      className="flex-1 bg-indigo-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                      disabled={!newPost.title || !newPost.date || !newPost.time || isLoading}
+                      className="flex-1 bg-indigo-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
+                      {isLoading ? <Loader2 size={16} className="animate-spin" /> : null}
                       Schedule Post
                     </button>
                   </div>
