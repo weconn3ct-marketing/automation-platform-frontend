@@ -69,6 +69,27 @@ export interface LinkedInConnectionForm {
 }
 
 // Post types
+export interface PostEngagement {
+  likes: number;
+  comments: number;
+  shares: number;
+  views: number;
+  impressions: number;
+}
+
+export type NotificationLevel = 'info' | 'success' | 'warning' | 'error';
+
+export interface AppNotification {
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  level: NotificationLevel;
+  read: boolean;
+  createdAt: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface Post {
   id: string;
   userId: string;
@@ -85,6 +106,7 @@ export interface Post {
   topic?: string;
   imagePrompt?: string;
   metadata?: PostMetadata;
+  engagement?: PostEngagement | null;
   createdAt: string;
   updatedAt: string;
 }

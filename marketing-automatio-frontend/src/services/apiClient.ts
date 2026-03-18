@@ -1,5 +1,5 @@
 import axios, { AxiosError } from 'axios';
-import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
+import type { AxiosInstance, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { API_BASE_URL } from '../lib/constants';
 import { authStorage } from '../lib/storage';
 import type { ApiError, ApiResponse } from '../types';
@@ -14,6 +14,26 @@ const apiClient: AxiosInstance = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+// Track whether a refresh is in progress to avoid parallel refresh calls
+let isRefreshing = false;
+
+// Queue of requests waiting for token refresh
+let failedQueue: Array<{
+  resolve: (token: string) => void;
+  reject: (error: unknown) => void;
+}> = [];
+
+const processQueue = (error: unknown, token: string | null = null) => {
+  failedQueue.forEach(({ resolve, reject }) => {
+    if (error) {
+      reject(error);
+    } else {
+      resolve(token!);
+    }
+  });
+  failedQueue = [];
+};
 
 /**
  * Request interceptor - Add auth token to requests
@@ -32,17 +52,70 @@ apiClient.interceptors.request.use(
 );
 
 /**
- * Response interceptor - Handle errors globally
+ * Response interceptor - Handle token refresh on 401, then format errors globally
  */
 apiClient.interceptors.response.use(
   (response: AxiosResponse) => {
     return response;
   },
   async (error: AxiosError<ApiError>) => {
-    // Handle 401 Unauthorized - Clear auth and redirect to login
-    if (error.response?.status === 401) {
-      authStorage.clearAuth();
-      window.location.href = '/login';
+    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+    const requestUrl = originalRequest?.url ?? '';
+    const isAuthRequest =
+      requestUrl.includes('/auth/login') ||
+      requestUrl.includes('/auth/signup') ||
+      requestUrl.includes('/auth/refresh');
+
+    // Attempt token refresh on 401, but only once per request
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthRequest) {
+      const refreshToken = localStorage.getItem('refresh_token');
+
+      // No refresh token stored — clear auth and redirect immediately
+      if (!refreshToken) {
+        authStorage.clearAuth();
+        localStorage.removeItem('refresh_token');
+        window.location.href = '/login';
+        return Promise.reject(error);
+      }
+
+      // If a refresh is already in flight, queue this request
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        }).then((token) => {
+          originalRequest.headers.Authorization = `Bearer ${token}`;
+          return apiClient(originalRequest);
+        });
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        // Use a plain axios call to avoid the interceptor re-running on this request
+        const response = await axios.post<ApiResponse<{ token: string; refreshToken: string }>>(
+          `${API_BASE_URL}/auth/refresh`,
+          { refreshToken }
+        );
+
+        const { token: newToken, refreshToken: newRefreshToken } = response.data.data;
+
+        authStorage.setToken(newToken);
+        localStorage.setItem('refresh_token', newRefreshToken);
+
+        processQueue(null, newToken);
+
+        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        return apiClient(originalRequest);
+      } catch (refreshError) {
+        processQueue(refreshError, null);
+        authStorage.clearAuth();
+        localStorage.removeItem('refresh_token');
+        window.location.href = '/login';
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
     }
 
     // Format error for consistent handling

@@ -2,15 +2,14 @@ import { useState, useEffect } from 'react';
 import { Sidebar } from '../../components/Sidebar';
 import { Header } from '../../components/Header';
 import { Card } from '../../components/ui/Card';
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  Plus, 
-  Clock, 
-  Webhook, 
+import {
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Clock,
+  Webhook,
   Hand,
   AlertTriangle,
-  Calendar as CalendarIcon,
   Repeat,
   Loader2,
 } from 'lucide-react';
@@ -58,9 +57,23 @@ function mapPostToScheduled(post: Post): ScheduledPost {
 export const CalendarPage = () => {
   const { posts: rawPosts, fetchPosts, createPost, isLoading } = usePostsStore();
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [, setSelectedDate] = useState<Date | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([]);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+
+  const SCHEDULE_BUFFER_MS = 60 * 1000;
+
+  const getLocalDateString = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const minSchedulableDate = getLocalDateString(startOfToday);
 
   // Fetch scheduled posts from the API on mount
   useEffect(() => {
@@ -138,9 +151,46 @@ export const CalendarPage = () => {
   };
 
   const handleAddPost = async () => {
-    if (!newPost.title || !newPost.date || !newPost.time) return;
+    if (!newPost.title.trim()) {
+      setScheduleError('Post title is required.');
+      return;
+    }
+
+    if (!newPost.date) {
+      setScheduleError('Schedule date is required.');
+      return;
+    }
+
+    if (!newPost.time) {
+      setScheduleError('Schedule time is required.');
+      return;
+    }
+
+    setScheduleError(null);
+
+    const selectedDate = new Date(`${newPost.date}T00:00:00`);
+    if (Number.isNaN(selectedDate.getTime())) {
+      setScheduleError('Please select a valid schedule date.');
+      return;
+    }
+
+    if (selectedDate < startOfToday) {
+      setScheduleError('Past dates are not allowed. Please choose today or a future date.');
+      return;
+    }
 
     const scheduledAt = `${newPost.date}T${newPost.time}:00`;
+    const scheduledDateTime = new Date(scheduledAt);
+
+    if (Number.isNaN(scheduledDateTime.getTime())) {
+      setScheduleError('Please select a valid schedule time.');
+      return;
+    }
+
+    if (scheduledDateTime.getTime() < Date.now() + SCHEDULE_BUFFER_MS) {
+      setScheduleError('Schedule time must be current or future (at least 1 minute ahead).');
+      return;
+    }
 
     try {
       await createPost({
@@ -152,6 +202,7 @@ export const CalendarPage = () => {
         scheduledAt,
       });
       setShowAddModal(false);
+      setScheduleError(null);
       setNewPost({
         title: '',
         date: '',
@@ -164,6 +215,7 @@ export const CalendarPage = () => {
       // Refresh scheduled posts
       fetchPosts({ status: 'scheduled', limit: 100 });
     } catch (err) {
+      setScheduleError('Failed to schedule post. Please try again.');
       console.error('Failed to schedule post:', err);
     }
   };
@@ -244,17 +296,24 @@ export const CalendarPage = () => {
                   {Array.from({ length: daysInMonth }).map((_, i) => {
                     const day = i + 1;
                     const posts = getPostsForDate(day);
+                    const dayDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
                     const isToday = 
                       day === new Date().getDate() &&
                       currentDate.getMonth() === new Date().getMonth() &&
                       currentDate.getFullYear() === new Date().getFullYear();
+                    const isPastDay = dayDate < startOfToday;
                     const warning = hasWarning(day);
 
                     return (
                       <div
                         key={day}
-                        onClick={() => setSelectedDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), day))}
-                        className={`aspect-square p-2 border rounded-lg cursor-pointer transition-all hover:border-indigo-300 hover:shadow-sm ${
+                        onClick={() => {
+                          if (isPastDay) return;
+                          setSelectedDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), day));
+                        }}
+                        className={`aspect-square p-2 border rounded-lg transition-all ${
+                          isPastDay ? 'cursor-not-allowed opacity-50 bg-gray-50' : 'cursor-pointer hover:border-indigo-300 hover:shadow-sm'
+                        } ${
                           isToday ? 'bg-indigo-50 border-indigo-300' : 'border-gray-200'
                         } ${warning ? 'border-orange-300 bg-orange-50' : ''}`}
                       >
@@ -339,12 +398,21 @@ export const CalendarPage = () => {
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-2xl font-bold text-gray-900">Schedule New Post</h2>
                   <button
-                    onClick={() => setShowAddModal(false)}
+                    onClick={() => {
+                      setShowAddModal(false);
+                      setScheduleError(null);
+                    }}
                     className="text-gray-400 hover:text-gray-600 transition-colors"
                   >
                     ✕
                   </button>
                 </div>
+
+                {scheduleError && (
+                  <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-red-800 text-sm font-medium">
+                    ⚠️ {scheduleError}
+                  </div>
+                )}
 
                 <div className="space-y-4">
                   {/* Title */}
@@ -355,7 +423,10 @@ export const CalendarPage = () => {
                     <input
                       type="text"
                       value={newPost.title}
-                      onChange={(e) => setNewPost({ ...newPost, title: e.target.value })}
+                      onChange={(e) => {
+                        setNewPost({ ...newPost, title: e.target.value });
+                        if (scheduleError) setScheduleError(null);
+                      }}
                       placeholder="Enter post title..."
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     />
@@ -370,7 +441,11 @@ export const CalendarPage = () => {
                       <input
                         type="date"
                         value={newPost.date}
-                        onChange={(e) => setNewPost({ ...newPost, date: e.target.value })}
+                        min={minSchedulableDate}
+                        onChange={(e) => {
+                          setNewPost({ ...newPost, date: e.target.value });
+                          if (scheduleError) setScheduleError(null);
+                        }}
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                       />
                     </div>
@@ -381,7 +456,10 @@ export const CalendarPage = () => {
                       <input
                         type="time"
                         value={newPost.time}
-                        onChange={(e) => setNewPost({ ...newPost, time: e.target.value })}
+                        onChange={(e) => {
+                          setNewPost({ ...newPost, time: e.target.value });
+                          if (scheduleError) setScheduleError(null);
+                        }}
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                       />
                     </div>
@@ -480,7 +558,10 @@ export const CalendarPage = () => {
                   {/* Action Buttons */}
                   <div className="flex gap-3 pt-4">
                     <button
-                      onClick={() => setShowAddModal(false)}
+                      onClick={() => {
+                        setShowAddModal(false);
+                        setScheduleError(null);
+                      }}
                       className="flex-1 bg-gray-100 text-gray-700 font-semibold py-3 px-4 rounded-lg hover:bg-gray-200 transition-colors"
                     >
                       Cancel

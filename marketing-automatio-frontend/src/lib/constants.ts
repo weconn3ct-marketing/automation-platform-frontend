@@ -30,6 +30,12 @@ export const API_ENDPOINTS = {
     DASHBOARD: '/analytics/dashboard',
     POST: (id: string) => `/analytics/posts/${id}`,
   },
+  NOTIFICATIONS: {
+    LIST: '/notifications',
+    STREAM: '/notifications/stream',
+    READ: (id: string) => `/notifications/${id}/read`,
+    READ_ALL: '/notifications/read-all',
+  },
 } as const;
 
 // Platform Configuration

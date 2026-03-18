@@ -1,9 +1,13 @@
-import { useState } from 'react';
-import { Bell, Search, Menu, X, ChevronDown, User, Settings, LogOut } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Bell, Search, ChevronDown, User, Settings, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useToastStore } from '../store/toastStore';
 import { getInitials } from '../lib/utils';
+import { API_BASE_URL, API_ENDPOINTS } from '../lib/constants';
+import { authStorage } from '../lib/storage';
+import { api } from '../services/apiClient';
+import type { AppNotification } from '../types';
 
 interface HeaderProps {
   title: string;
@@ -15,11 +19,14 @@ export const Header = ({ title, subtitle, showSearch = true }: HeaderProps) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [isNotificationsLoading, setIsNotificationsLoading] = useState(false);
+  const [isNotificationsConnected, setIsNotificationsConnected] = useState(false);
   
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
-  const { success } = useToastStore();
+  const { success, info } = useToastStore();
 
   const handleLogout = () => {
     logout();
@@ -27,13 +34,109 @@ export const Header = ({ title, subtitle, showSearch = true }: HeaderProps) => {
     navigate('/login');
   };
 
-  const notifications = [
-    { id: 1, message: 'Your post was published successfully', time: '2 minutes ago', unread: true },
-    { id: 2, message: 'LinkedIn account needs reconnection', time: '1 hour ago', unread: true },
-    { id: 3, message: 'Weekly report is ready', time: '3 hours ago', unread: false },
-  ];
+  const unreadCount = useMemo(
+    () => notifications.filter((notification) => !notification.read).length,
+    [notifications]
+  );
 
-  const unreadCount = notifications.filter(n => n.unread).length;
+  useEffect(() => {
+    const token = authStorage.getToken();
+    if (!token) return;
+
+    let isActive = true;
+
+    const fetchNotifications = async () => {
+      setIsNotificationsLoading(true);
+      try {
+        const response = await api.get<AppNotification[]>(API_ENDPOINTS.NOTIFICATIONS.LIST);
+        if (!isActive) return;
+        setNotifications(response.data);
+      } catch {
+        if (!isActive) return;
+      } finally {
+        if (isActive) {
+          setIsNotificationsLoading(false);
+        }
+      }
+    };
+
+    void fetchNotifications();
+
+    const streamUrl = `${API_BASE_URL}${API_ENDPOINTS.NOTIFICATIONS.STREAM}?token=${encodeURIComponent(token)}`;
+    const eventSource = new EventSource(streamUrl);
+
+    eventSource.onopen = () => {
+      if (!isActive) return;
+      setIsNotificationsConnected(true);
+    };
+
+    eventSource.addEventListener('connected', () => {
+      if (!isActive) return;
+      setIsNotificationsConnected(true);
+    });
+
+    eventSource.addEventListener('notification', (event) => {
+      if (!isActive) return;
+
+      try {
+        const nextNotification = JSON.parse(event.data) as AppNotification;
+
+        setNotifications((previous) => {
+          const deduped = previous.filter((item) => item.id !== nextNotification.id);
+          return [nextNotification, ...deduped].slice(0, 100);
+        });
+
+        info(nextNotification.message, 4000);
+      } catch {
+        // Ignore invalid SSE payloads
+      }
+    });
+
+    eventSource.onerror = () => {
+      if (!isActive) return;
+      setIsNotificationsConnected(false);
+    };
+
+    return () => {
+      isActive = false;
+      setIsNotificationsConnected(false);
+      eventSource.close();
+    };
+  }, [info]);
+
+  const handleNotificationClick = async (notificationId: string) => {
+    const target = notifications.find((item) => item.id === notificationId);
+    if (!target || target.read) return;
+
+    setNotifications((previous) =>
+      previous.map((item) => (item.id === notificationId ? { ...item, read: true } : item))
+    );
+
+    try {
+      await api.patch(API_ENDPOINTS.NOTIFICATIONS.READ(notificationId));
+    } catch {
+      setNotifications((previous) =>
+        previous.map((item) => (item.id === notificationId ? { ...item, read: false } : item))
+      );
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    const unreadIds = notifications.filter((notification) => !notification.read).map((notification) => notification.id);
+    if (unreadIds.length === 0) return;
+
+    setNotifications((previous) => previous.map((item) => ({ ...item, read: true })));
+
+    try {
+      await api.post(API_ENDPOINTS.NOTIFICATIONS.READ_ALL);
+    } catch {
+      setNotifications((previous) =>
+        previous.map((item) =>
+          unreadIds.includes(item.id) ? { ...item, read: false } : item
+        )
+      );
+    }
+  };
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
@@ -74,48 +177,62 @@ export const Header = ({ title, subtitle, showSearch = true }: HeaderProps) => {
               <button
                 onClick={() => setShowNotifications(!showNotifications)}
                 className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Notifications"
               >
                 <Bell size={20} />
                 {unreadCount > 0 && (
                   <span className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
-                    {unreadCount}
+                    {unreadCount > 9 ? '9+' : unreadCount}
                   </span>
                 )}
               </button>
 
-              {/* Notifications Dropdown */}
               {showNotifications && (
                 <>
-                  <div 
-                    className="fixed inset-0 z-10" 
+                  <div
+                    className="fixed inset-0 z-10"
                     onClick={() => setShowNotifications(false)}
                   />
                   <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-20 animate-fade-in">
                     <div className="p-4 border-b border-gray-100">
                       <div className="flex items-center justify-between">
-                        <h3 className="font-semibold text-gray-900">Notifications</h3>
-                        <button className="text-xs text-indigo-600 hover:text-indigo-700 font-medium">
+                        <div>
+                          <h3 className="font-semibold text-gray-900">Notifications</h3>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {isNotificationsConnected ? 'Live updates connected' : 'Live updates reconnecting...'}
+                          </p>
+                        </div>
+                        <button
+                          onClick={handleMarkAllRead}
+                          className="text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+                        >
                           Mark all read
                         </button>
                       </div>
                     </div>
+
                     <div className="max-h-96 overflow-y-auto">
-                      {notifications.map((notif) => (
-                        <div
-                          key={notif.id}
-                          className={`p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors ${
-                            notif.unread ? 'bg-indigo-50/50' : ''
-                          }`}
-                        >
-                          <p className="text-sm text-gray-900 mb-1">{notif.message}</p>
-                          <p className="text-xs text-gray-500">{notif.time}</p>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="p-3 border-t border-gray-100">
-                      <button className="w-full text-center text-sm text-indigo-600 hover:text-indigo-700 font-medium">
-                        View all notifications
-                      </button>
+                      {isNotificationsLoading ? (
+                        <div className="p-4 text-sm text-gray-500">Loading notifications...</div>
+                      ) : notifications.length === 0 ? (
+                        <div className="p-4 text-sm text-gray-500">No notifications yet</div>
+                      ) : (
+                        notifications.map((notification) => (
+                          <button
+                            key={notification.id}
+                            onClick={() => handleNotificationClick(notification.id)}
+                            className={`w-full text-left p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors ${
+                              !notification.read ? 'bg-indigo-50/50' : ''
+                            }`}
+                          >
+                            <p className="text-sm font-semibold text-gray-900 mb-1">{notification.title}</p>
+                            <p className="text-sm text-gray-700 mb-1">{notification.message}</p>
+                            <p className="text-xs text-gray-500">
+                              {new Date(notification.createdAt).toLocaleString()}
+                            </p>
+                          </button>
+                        ))
+                      )}
                     </div>
                   </div>
                 </>

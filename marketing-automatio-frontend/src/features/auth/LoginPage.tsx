@@ -49,10 +49,13 @@ const AuthPage = ({ initialMode = "login" }: AuthPageProps) => {
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
+    const normalizedEmail = email.trim();
+    const normalizedFirstName = firstName.trim();
+    const normalizedLastName = lastName.trim();
 
-    if (!email) {
+    if (!normalizedEmail) {
       newErrors.email = "Email is required";
-    } else if (!isValidEmail(email)) {
+    } else if (!isValidEmail(normalizedEmail)) {
       newErrors.email = "Invalid email format";
     }
 
@@ -63,8 +66,8 @@ const AuthPage = ({ initialMode = "login" }: AuthPageProps) => {
     }
 
     if (mode === "signup") {
-      if (!firstName) newErrors.firstName = "First name is required";
-      if (!lastName) newErrors.lastName = "Last name is required";
+      if (!normalizedFirstName) newErrors.firstName = "First name is required";
+      if (!normalizedLastName) newErrors.lastName = "Last name is required";
     }
 
     setErrors(newErrors);
@@ -76,13 +79,22 @@ const AuthPage = ({ initialMode = "login" }: AuthPageProps) => {
     
     if (!validateForm()) return;
 
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedFirstName = firstName.trim();
+    const normalizedLastName = lastName.trim();
+
     try {
       if (mode === "login") {
-        await login({ email, password });
+        await login({ email: normalizedEmail, password });
         success("Welcome back!");
         navigate("/dashboard");
       } else {
-        await signup({ email, password, firstName, lastName });
+        await signup({
+          email: normalizedEmail,
+          password,
+          firstName: normalizedFirstName,
+          lastName: normalizedLastName,
+        });
         success("Account created successfully!");
         navigate("/dashboard");
       }

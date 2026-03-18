@@ -208,7 +208,7 @@ export const DashboardPage = () => {
                   Start crafting your next social media masterpiece with AI
                 </p>
                 <button
-                  onClick={() => navigate('/create-post')}
+                  onClick={() => navigate('/dashboard/create')}
                   className="w-full bg-white text-indigo-600 font-semibold py-3 px-4 rounded-lg hover:bg-indigo-50 transition-colors flex items-center justify-center gap-2"
                 >
                   <Plus size={20} />

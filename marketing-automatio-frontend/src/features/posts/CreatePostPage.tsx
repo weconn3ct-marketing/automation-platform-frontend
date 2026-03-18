@@ -59,9 +59,96 @@ const PLATFORMS: { id: Platform; label: string; icon: React.ReactNode; bg: strin
   },
 ];
 
+const DEFAULT_TIME_ZONES = [
+  Intl.DateTimeFormat().resolvedOptions().timeZone,
+  'UTC',
+  'Asia/Kolkata',
+  'Europe/London',
+  'America/New_York',
+  'America/Los_Angeles',
+  'Asia/Dubai',
+  'Australia/Sydney',
+].filter((value, index, array) => Boolean(value) && array.indexOf(value) === index);
+
+const getDateTimeInTimeZone = (date: Date, timeZone: string, includeSeconds = false): string => {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const base = `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
+  return includeSeconds ? `${base}:${values.second}` : base;
+};
+
+const getTimeZoneOffsetMs = (date: Date, timeZone: string): number => {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const asUtc = Date.UTC(
+    Number(values.year),
+    Number(values.month) - 1,
+    Number(values.day),
+    Number(values.hour),
+    Number(values.minute),
+    Number(values.second)
+  );
+
+  return asUtc - date.getTime();
+};
+
+const parseZonedDateTime = (value: string, timeZone: string): Date | null => {
+  if (!value) return null;
+
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+  if (!match) return null;
+
+  const [, year, month, day, hour, minute] = match;
+  const utcGuess = Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    0,
+    0
+  );
+
+  let offset = getTimeZoneOffsetMs(new Date(utcGuess), timeZone);
+  let utcTime = utcGuess - offset;
+  const recalculatedOffset = getTimeZoneOffsetMs(new Date(utcTime), timeZone);
+  if (recalculatedOffset !== offset) {
+    offset = recalculatedOffset;
+    utcTime = utcGuess - offset;
+  }
+
+  const parsedDate = new Date(utcTime);
+  return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
+};
+
 export const CreatePostPage = () => {
   const navigate = useNavigate();
   const { createPost, publishPost } = usePostsStore();
+
+  const MIN_TOPIC_LENGTH = 3;
+  const SCHEDULE_BUFFER_MS = 60 * 1000;
 
   const [topic, setTopic] = useState('');
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([]);
@@ -69,6 +156,9 @@ export const CreatePostPage = () => {
   const [tone, setTone] = useState<ToneStyle>('professional');
   const [imagePrompt, setImagePrompt] = useState('');
   const [scheduledAt, setScheduledAt] = useState('');
+  const [scheduleTimeZone, setScheduleTimeZone] = useState(
+    Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+  );
 
   const [generatedPost, setGeneratedPost] = useState<Post | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -77,6 +167,57 @@ export const CreatePostPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  const minScheduleDateTime = getDateTimeInTimeZone(new Date(), scheduleTimeZone);
+
+  const validateGenerateInput = (): string | null => {
+    const trimmedTopic = topic.trim();
+
+    if (!trimmedTopic) {
+      return 'Topic is required.';
+    }
+
+    if (trimmedTopic.length < MIN_TOPIC_LENGTH) {
+      return `Topic must be at least ${MIN_TOPIC_LENGTH} characters.`;
+    }
+
+    if (selectedPlatforms.length === 0) {
+      return 'Select at least one platform.';
+    }
+
+    if (!contentType) {
+      return 'Content type is required.';
+    }
+
+    if (!tone) {
+      return 'Tone/style is required.';
+    }
+
+    return null;
+  };
+
+  const getScheduledDate = (value: string): Date | null => parseZonedDateTime(value, scheduleTimeZone);
+
+  const validateScheduleInput = (): string | null => {
+    if (!generatedPost) {
+      return 'Generate a post before scheduling it.';
+    }
+
+    if (!scheduledAt) {
+      return 'Select a schedule date and time.';
+    }
+
+    const parsedDate = getScheduledDate(scheduledAt);
+    if (!parsedDate) {
+      return 'Schedule date/time is invalid.';
+    }
+
+    if (parsedDate.getTime() <= Date.now() + SCHEDULE_BUFFER_MS) {
+      return `Schedule time must be current or future in ${scheduleTimeZone} (at least 1 minute ahead).`;
+    }
+
+    return null;
+  };
+
   const togglePlatform = (platform: Platform) => {
     setSelectedPlatforms((prev) =>
       prev.includes(platform) ? prev.filter((p) => p !== platform) : [...prev, platform]
@@ -84,17 +225,25 @@ export const CreatePostPage = () => {
   };
 
   const handleGenerate = async () => {
-    if (!topic || selectedPlatforms.length === 0) return;
+    const validationError = validateGenerateInput();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    const trimmedTopic = topic.trim();
+    const trimmedImagePrompt = imagePrompt.trim();
+
     setIsGenerating(true);
     setError(null);
     setSuccessMsg(null);
     try {
       const post = await createPost({
-        topic,
+        topic: trimmedTopic,
         platforms: selectedPlatforms,
         contentType,
         tone,
-        imagePrompt: imagePrompt || undefined,
+        imagePrompt: trimmedImagePrompt || undefined,
       });
       setGeneratedPost(post);
     } catch (err: any) {
@@ -125,16 +274,31 @@ export const CreatePostPage = () => {
   };
 
   const handleSchedule = async () => {
-    if (!generatedPost || !scheduledAt) return;
+    const validationError = validateScheduleInput();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    const parsedDate = getScheduledDate(scheduledAt);
+    if (!parsedDate || !generatedPost) {
+      setError('Schedule date/time is invalid.');
+      return;
+    }
+
     setIsScheduling(true);
     setError(null);
     try {
       const { editPost } = usePostsStore.getState();
       await editPost(generatedPost.id, {
         status: 'scheduled',
-        scheduledAt,
+        scheduledAt: parsedDate.toISOString(),
       });
-      setSuccessMsg('📅 Post scheduled for ' + new Date(scheduledAt).toLocaleString() + '!');
+      setSuccessMsg(
+        '📅 Post scheduled for ' +
+        parsedDate.toLocaleString(undefined, { timeZone: scheduleTimeZone, timeZoneName: 'short' }) +
+        ` (${scheduleTimeZone})!`
+      );
       setTimeout(() => navigate('/dashboard/calendar'), 2000);
     } catch (err: any) {
       setError(err.message || 'Failed to schedule post');
@@ -278,7 +442,7 @@ export const CreatePostPage = () => {
               {/* Generate Button */}
               <button
                 onClick={handleGenerate}
-                disabled={!topic || selectedPlatforms.length === 0 || isGenerating}
+                disabled={isGenerating}
                 className="w-full bg-indigo-600 text-white font-semibold py-4 px-6 rounded-lg hover:bg-indigo-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg hover:shadow-xl"
               >
                 {isGenerating ? (
@@ -382,12 +546,36 @@ export const CreatePostPage = () => {
                         <CalendarIcon size={14} className="inline mr-1" />
                         Schedule Date & Time (optional)
                       </label>
+                      <div className="mb-3">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Time Zone</label>
+                        <select
+                          value={scheduleTimeZone}
+                          onChange={(e) => {
+                            setScheduleTimeZone(e.target.value);
+                            if (error) setError(null);
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
+                        >
+                          {DEFAULT_TIME_ZONES.map((timeZone) => (
+                            <option key={timeZone} value={timeZone}>
+                              {timeZone}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                       <input
                         type="datetime-local"
                         value={scheduledAt}
-                        onChange={(e) => setScheduledAt(e.target.value)}
+                        min={minScheduleDateTime}
+                        onChange={(e) => {
+                          setScheduledAt(e.target.value);
+                          if (error) setError(null);
+                        }}
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
                       />
+                      <p className="mt-2 text-xs text-gray-500">
+                        Current time in {scheduleTimeZone}: {getDateTimeInTimeZone(new Date(), scheduleTimeZone, true).replace('T', ' ')}
+                      </p>
                     </div>
 
                     {/* Action Buttons */}
