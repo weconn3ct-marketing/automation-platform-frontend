@@ -1,14 +1,20 @@
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, PlusCircle, Calendar, History, Link2, Settings, LogOut, ChevronRight, Zap } from 'lucide-react';
+import { Home, PlusCircle, Calendar, History, Bell, Link2, Settings, LogOut, ChevronRight, Zap } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useToastStore } from '../store/toastStore';
+import { api } from '../services/apiClient';
+import { API_ENDPOINTS } from '../lib/constants';
+import { authStorage } from '../lib/storage';
+import type { AppNotification } from '../types';
 
 const menuItems = [
-  { icon: Home, label: 'Dashboard', path: '/dashboard', badge: null },
-  { icon: PlusCircle, label: 'Create Post', path: '/dashboard/create', badge: null },
-  { icon: Calendar, label: 'Calendar', path: '/dashboard/calendar', badge: '3' },
-  { icon: History, label: 'History', path: '/dashboard/history', badge: null },
-  { icon: Link2, label: 'Accounts', path: '/dashboard/accounts', badge: '2' },
+  { icon: Home, label: 'Dashboard', path: '/dashboard' },
+  { icon: PlusCircle, label: 'Create Post', path: '/dashboard/create' },
+  { icon: Calendar, label: 'Calendar', path: '/dashboard/calendar' },
+  { icon: Bell, label: 'Notifications', path: '/dashboard/history' },
+  { icon: History, label: 'History', path: '/dashboard/history' },
+  { icon: Link2, label: 'Accounts', path: '/dashboard/accounts' },
 ];
 
 export const Sidebar = () => {
@@ -16,6 +22,40 @@ export const Sidebar = () => {
   const navigate = useNavigate();
   const logout = useAuthStore((state) => state.logout);
   const { success } = useToastStore();
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+
+  useEffect(() => {
+    const token = authStorage.getToken();
+    if (!token) {
+      setUnreadNotifications(0);
+      return;
+    }
+
+    let isActive = true;
+
+    const fetchUnreadNotifications = async () => {
+      try {
+        const response = await api.get<AppNotification[]>(API_ENDPOINTS.NOTIFICATIONS.LIST);
+        if (!isActive) return;
+
+        const unreadCount = response.data.filter((notification) => !notification.read).length;
+        setUnreadNotifications(unreadCount);
+      } catch {
+        if (!isActive) return;
+        setUnreadNotifications(0);
+      }
+    };
+
+    void fetchUnreadNotifications();
+    const intervalId = window.setInterval(() => {
+      void fetchUnreadNotifications();
+    }, 30000);
+
+    return () => {
+      isActive = false;
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -45,10 +85,16 @@ export const Sidebar = () => {
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = location.pathname === item.path;
+          const isNotificationsItem = item.label === 'Notifications';
+          const badge = isNotificationsItem && unreadNotifications > 0
+            ? unreadNotifications > 99
+              ? '99+'
+              : unreadNotifications.toString()
+            : null;
           
           return (
             <Link
-              key={item.path}
+              key={item.label}
               to={item.path}
               className={`group flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 ${
                 isActive
@@ -61,13 +107,13 @@ export const Sidebar = () => {
                 <span className="font-medium">{item.label}</span>
               </div>
               <div className="flex items-center gap-2">
-                {item.badge && (
+                {badge && (
                   <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
                     isActive 
                       ? 'bg-indigo-600 text-white' 
                       : 'bg-gray-200 text-gray-600'
                   }`}>
-                    {item.badge}
+                    {badge}
                   </span>
                 )}
                 {isActive && <ChevronRight size={16} className="text-indigo-600" />}
