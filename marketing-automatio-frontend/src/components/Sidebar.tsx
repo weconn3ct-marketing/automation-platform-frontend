@@ -12,7 +12,6 @@ const menuItems = [
   { icon: Home, label: 'Dashboard', path: '/dashboard' },
   { icon: PlusCircle, label: 'Create Post', path: '/dashboard/create' },
   { icon: Calendar, label: 'Calendar', path: '/dashboard/calendar' },
-  { icon: Bell, label: 'Notifications', path: '/dashboard/history' },
   { icon: History, label: 'History', path: '/dashboard/history' },
   { icon: Link2, label: 'Accounts', path: '/dashboard/accounts' },
 ];
@@ -98,25 +97,25 @@ export const Sidebar = () => {
               to={item.path}
               className={`group flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 ${
                 isActive
-                  ? 'bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-600 shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  ? 'bg-gradient-to-r from-indigo-700 to-purple-700 text-white shadow-md shadow-indigo-200'
+                  : 'text-gray-600 hover:bg-indigo-100 hover:text-indigo-700'
               }`}
             >
               <div className="flex items-center gap-3">
-                <Icon size={20} className={`${isActive ? 'text-indigo-600' : 'text-gray-400 group-hover:text-gray-600'}`} />
+                <Icon size={20} className={`${isActive ? 'text-white' : 'text-gray-400 group-hover:text-indigo-600'}`} />
                 <span className="font-medium">{item.label}</span>
               </div>
               <div className="flex items-center gap-2">
                 {badge && (
                   <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
                     isActive 
-                      ? 'bg-indigo-600 text-white' 
-                      : 'bg-gray-200 text-gray-600'
+                      ? 'bg-white text-indigo-700' 
+                      : 'bg-indigo-100 text-indigo-700'
                   }`}>
                     {badge}
                   </span>
                 )}
-                {isActive && <ChevronRight size={16} className="text-indigo-600" />}
+                {isActive && <ChevronRight size={16} className="text-white" />}
               </div>
             </Link>
           );
@@ -128,7 +127,7 @@ export const Sidebar = () => {
         {/* Settings */}
         <button
           onClick={() => navigate('/dashboard/accounts')}
-          className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all duration-200"
+          className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-gray-600 hover:bg-indigo-100 hover:text-indigo-700 transition-all duration-200"
         >
           <Settings size={18} />
           <span className="font-medium text-sm">Settings</span>
@@ -137,7 +136,7 @@ export const Sidebar = () => {
         {/* Logout */}
         <button
           onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-red-600 hover:bg-red-50 transition-all duration-200"
+          className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-red-600 hover:bg-red-100 hover:text-red-700 transition-all duration-200"
         >
           <LogOut size={18} />
           <span className="font-medium text-sm">Logout</span>
