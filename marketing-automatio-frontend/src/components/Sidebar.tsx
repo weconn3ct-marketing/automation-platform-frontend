@@ -1,12 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, PlusCircle, Calendar, History, Bell, Link2, Settings, LogOut, ChevronRight, Zap } from 'lucide-react';
+import { Home, PlusCircle, Calendar, History, Link2, Settings, LogOut, ChevronRight, Zap } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useToastStore } from '../store/toastStore';
-import { api } from '../services/apiClient';
-import { API_ENDPOINTS } from '../lib/constants';
-import { authStorage } from '../lib/storage';
-import type { AppNotification } from '../types';
 
 const menuItems = [
   { icon: Home, label: 'Dashboard', path: '/dashboard' },
@@ -21,40 +17,6 @@ export const Sidebar = () => {
   const navigate = useNavigate();
   const logout = useAuthStore((state) => state.logout);
   const { success } = useToastStore();
-  const [unreadNotifications, setUnreadNotifications] = useState(0);
-
-  useEffect(() => {
-    const token = authStorage.getToken();
-    if (!token) {
-      setUnreadNotifications(0);
-      return;
-    }
-
-    let isActive = true;
-
-    const fetchUnreadNotifications = async () => {
-      try {
-        const response = await api.get<AppNotification[]>(API_ENDPOINTS.NOTIFICATIONS.LIST);
-        if (!isActive) return;
-
-        const unreadCount = response.data.filter((notification) => !notification.read).length;
-        setUnreadNotifications(unreadCount);
-      } catch {
-        if (!isActive) return;
-        setUnreadNotifications(0);
-      }
-    };
-
-    void fetchUnreadNotifications();
-    const intervalId = window.setInterval(() => {
-      void fetchUnreadNotifications();
-    }, 30000);
-
-    return () => {
-      isActive = false;
-      window.clearInterval(intervalId);
-    };
-  }, []);
 
   const handleLogout = () => {
     logout();
@@ -84,12 +46,6 @@ export const Sidebar = () => {
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = location.pathname === item.path;
-          const isNotificationsItem = item.label === 'Notifications';
-          const badge = isNotificationsItem && unreadNotifications > 0
-            ? unreadNotifications > 99
-              ? '99+'
-              : unreadNotifications.toString()
-            : null;
           
           return (
             <Link
@@ -105,18 +61,7 @@ export const Sidebar = () => {
                 <Icon size={20} className={`${isActive ? 'text-white' : 'text-gray-400 group-hover:text-indigo-600'}`} />
                 <span className="font-medium">{item.label}</span>
               </div>
-              <div className="flex items-center gap-2">
-                {badge && (
-                  <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
-                    isActive 
-                      ? 'bg-white text-indigo-700' 
-                      : 'bg-indigo-100 text-indigo-700'
-                  }`}>
-                    {badge}
-                  </span>
-                )}
-                {isActive && <ChevronRight size={16} className="text-white" />}
-              </div>
+              {isActive && <ChevronRight size={16} className="text-white" />}
             </Link>
           );
         })}

@@ -9,7 +9,9 @@ const App = () => {
 
   useEffect(() => {
     // Check authentication status on app mount
-    checkAuth();
+    checkAuth().catch((error) => {
+      console.error('Failed to check authentication:', error);
+    });
   }, [checkAuth]);
 
   return (
