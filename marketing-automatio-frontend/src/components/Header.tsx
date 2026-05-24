@@ -28,8 +28,8 @@ export const Header = ({ title, subtitle, showSearch = true }: HeaderProps) => {
   const logout = useAuthStore((state) => state.logout);
   const { success, info } = useToastStore();
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     success('Logged out successfully');
     navigate('/login');
   };
@@ -44,6 +44,8 @@ export const Header = ({ title, subtitle, showSearch = true }: HeaderProps) => {
     if (!token) return;
 
     let isActive = true;
+    let eventSource: EventSource | null = null;
+    let reconnectTimeoutId: NodeJS.Timeout | null = null;
 
     const fetchNotifications = async () => {
       setIsNotificationsLoading(true);
@@ -60,47 +62,78 @@ export const Header = ({ title, subtitle, showSearch = true }: HeaderProps) => {
       }
     };
 
-    void fetchNotifications();
-
-    const streamUrl = `${API_BASE_URL}${API_ENDPOINTS.NOTIFICATIONS.STREAM}?token=${encodeURIComponent(token)}`;
-    const eventSource = new EventSource(streamUrl);
-
-    eventSource.onopen = () => {
+    const connectEventSource = () => {
       if (!isActive) return;
-      setIsNotificationsConnected(true);
-    };
-
-    eventSource.addEventListener('connected', () => {
-      if (!isActive) return;
-      setIsNotificationsConnected(true);
-    });
-
-    eventSource.addEventListener('notification', (event) => {
-      if (!isActive) return;
-
+      
+      const streamUrl = `${API_BASE_URL}${API_ENDPOINTS.NOTIFICATIONS.STREAM}?token=${encodeURIComponent(token)}`;
+      
       try {
-        const nextNotification = JSON.parse(event.data) as AppNotification;
+        eventSource = new EventSource(streamUrl);
 
-        setNotifications((previous) => {
-          const deduped = previous.filter((item) => item.id !== nextNotification.id);
-          return [nextNotification, ...deduped].slice(0, 100);
+        eventSource.onopen = () => {
+          if (!isActive) return;
+          setIsNotificationsConnected(true);
+          if (reconnectTimeoutId) clearTimeout(reconnectTimeoutId);
+        };
+
+        eventSource.addEventListener('connected', () => {
+          if (!isActive) return;
+          setIsNotificationsConnected(true);
         });
 
-        info(nextNotification.message, 4000);
-      } catch {
-        // Ignore invalid SSE payloads
-      }
-    });
+        eventSource.addEventListener('notification', (event) => {
+          if (!isActive) return;
 
-    eventSource.onerror = () => {
-      if (!isActive) return;
-      setIsNotificationsConnected(false);
+          try {
+            const nextNotification = JSON.parse(event.data) as AppNotification;
+
+            setNotifications((previous) => {
+              const deduped = previous.filter((item) => item.id !== nextNotification.id);
+              return [nextNotification, ...deduped].slice(0, 100);
+            });
+
+            info(nextNotification.message, 4000);
+          } catch {
+            // Ignore invalid SSE payloads
+          }
+        });
+
+        eventSource.onerror = () => {
+          if (!isActive) return;
+          setIsNotificationsConnected(false);
+          eventSource?.close();
+          
+          // Attempt to reconnect after 5 seconds
+          reconnectTimeoutId = setTimeout(() => {
+            if (isActive) {
+              connectEventSource();
+            }
+          }, 5000);
+        };
+      } catch (error) {
+        if (!isActive) return;
+        setIsNotificationsConnected(false);
+        // Retry connection after delay
+        reconnectTimeoutId = setTimeout(() => {
+          if (isActive) {
+            connectEventSource();
+          }
+        }, 5000);
+      }
     };
+
+    void fetchNotifications();
+    connectEventSource();
 
     return () => {
       isActive = false;
       setIsNotificationsConnected(false);
-      eventSource.close();
+      if (eventSource) {
+        eventSource.close();
+      }
+      if (reconnectTimeoutId) {
+        clearTimeout(reconnectTimeoutId);
+      }
     };
   }, [info]);
 
@@ -156,7 +189,7 @@ export const Header = ({ title, subtitle, showSearch = true }: HeaderProps) => {
 
           {/* Center Section - Search */}
           {showSearch && (
-            <div className="flex-1 max-w-xl mx-8">
+            <div className="hidden md:block flex-1 max-w-xl mx-4 lg:mx-8">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                 <input
