@@ -45,7 +45,7 @@ export const Header = ({ title, subtitle, showSearch = true }: HeaderProps) => {
 
     let isActive = true;
     let eventSource: EventSource | null = null;
-    let reconnectTimeoutId: NodeJS.Timeout | null = null;
+    let reconnectTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
     const fetchNotifications = async () => {
       setIsNotificationsLoading(true);

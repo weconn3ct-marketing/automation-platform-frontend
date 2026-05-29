@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Home, PlusCircle, Calendar, History, Link2, Settings, LogOut, ChevronRight, Zap } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
