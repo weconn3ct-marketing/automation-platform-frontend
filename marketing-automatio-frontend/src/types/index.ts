@@ -48,8 +48,10 @@ export interface Connection {
   connectedAt?: string;
   lastSync?: string;
   accessToken?: string;
+  refreshToken?: string;
   expiresAt?: string;
   errorMessage?: string;
+  oauthProvider?: 'facebook' | 'instagram' | 'linkedin';
 }
 
 export interface InstagramConnectionForm {

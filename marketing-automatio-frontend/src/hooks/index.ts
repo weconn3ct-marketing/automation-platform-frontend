@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+export { useOAuth } from './useOAuth';
 
 interface DocumentTitleOptions {
   prefix?: string;
