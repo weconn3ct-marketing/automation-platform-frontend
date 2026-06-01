@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Connection, Platform } from '../types';
 import { api } from '../services/apiClient';
+import { oauthService } from '../services/oauthService';
 
 interface ConnectionsStore {
   connections: Connection[];
@@ -19,6 +20,9 @@ interface ConnectionsStore {
   createConnection: (data: Record<string, unknown>) => Promise<Connection>;
   removeConnection: (id: string) => Promise<void>;
   reconnect: (id: string) => Promise<void>;
+  // OAuth actions
+  initiateOAuth: (platform: 'facebook' | 'instagram' | 'linkedin') => Promise<void>;
+  refreshConnection: (connectionId: string) => Promise<void>;
 }
 
 export const useConnectionsStore = create<ConnectionsStore>((set, get) => ({
@@ -98,6 +102,30 @@ export const useConnectionsStore = create<ConnectionsStore>((set, get) => ({
       set({ isLoading: false });
     } catch (err: any) {
       set({ error: err.message || 'Failed to reconnect', isLoading: false });
+      throw err;
+    }
+  },
+
+  // ── OAuth Actions ──────────────────────────────────────────────────────
+
+  initiateOAuth: async (platform: 'facebook' | 'instagram' | 'linkedin') => {
+    set({ isLoading: true, error: null });
+    try {
+      await oauthService.initiateOAuth(platform);
+    } catch (err: any) {
+      set({ error: err.message || `Failed to initiate ${platform} OAuth`, isLoading: false });
+      throw err;
+    }
+  },
+
+  refreshConnection: async (connectionId: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      await oauthService.refreshToken(connectionId);
+      await get().fetchConnections();
+      set({ isLoading: false });
+    } catch (err: any) {
+      set({ error: err.message || 'Failed to refresh connection', isLoading: false });
       throw err;
     }
   },

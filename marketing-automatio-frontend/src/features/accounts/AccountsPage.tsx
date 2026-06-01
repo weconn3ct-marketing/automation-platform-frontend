@@ -6,37 +6,34 @@ import {
   CheckCircle2,
   XCircle,
   Plus,
-  Link2,
   RefreshCw,
   Trash2,
   Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import { useConnectionsStore } from '../../store/connectionsStore';
+import { useOAuth } from '../../hooks/useOAuth';
 import type { Platform } from '../../types';
 
 type BasicPlatform = 'instagram' | 'linkedin' | 'facebook';
-
-
 
 export const AccountsPage = () => {
   const {
     connections,
     isLoading,
     fetchConnections,
-    createConnection,
     removeConnection,
-    reconnect,
   } = useConnectionsStore();
+
+  const { isInitiating, error, connectPlatform, clearError } = useOAuth();
 
   useEffect(() => {
     fetchConnections();
   }, [fetchConnections]);
-  // const [showAddModal, setShowAddModal] = useState(false);
-  // const [selectedPlatform, setSelectedPlatform] = useState<Platform | null>(null);
-  const [showInstagramForm, setShowInstagramForm] = useState(false);
-  // const [showLinkedInForm, setShowLinkedInForm] = useState(false);
 
-  // Instagram Form State
+  const [showInstagramForm, setShowInstagramForm] = useState(false);
+
+  // Instagram Form State (for manual fallback)
   const [instagramForm, setInstagramForm] = useState({
     appId: '',
     appSecret: '',
@@ -44,16 +41,6 @@ export const AccountsPage = () => {
     facebookPageId: '',
     accessToken: '',
   });
-
-  // LinkedIn Form State (reserved for future LinkedIn OAuth flow)
-  const [linkedInForm] = useState({
-    clientId: '',
-    clientSecret: '',
-    redirectUri: '',
-    organizationId: '',
-    accessToken: '',
-  });
-  void linkedInForm; // suppress unused warning until LinkedIn flow is implemented
 
   const platformInfo = {
     instagram: {
@@ -83,12 +70,16 @@ export const AccountsPage = () => {
     return connections.find(c => c.platform === platform);
   };
 
-  const handleConnectPlatform = (platform: Platform) => {
-    // setSelectedPlatform(platform);
+  const handleConnectPlatform = async (platform: 'facebook' | 'instagram' | 'linkedin') => {
+    clearError();
     if (platform === 'instagram') {
       setShowInstagramForm(true);
-      // } else if (platform === 'linkedin') {
-      //   setShowLinkedInForm(true);
+    } else {
+      try {
+        await connectPlatform(platform);
+      } catch (err) {
+        console.error(`Failed to connect ${platform}:`, err);
+      }
     }
   };
 
@@ -98,81 +89,48 @@ export const AccountsPage = () => {
     }
   };
 
-  const handleReconnect = async (connectionId: string) => {
-    const connection = connections.find(c => c.id === connectionId);
-    if (connection) {
-      if (connection.status === 'error') {
-        await reconnect(connectionId);
-      } else {
-        handleConnectPlatform(connection.platform as Platform);
-      }
-    }
-  };
-
-  const handleInstagramSubmit = async () => {
+  const handleOAuthConnect = async (platform: 'facebook' | 'instagram' | 'linkedin') => {
+    clearError();
     try {
-      await createConnection({
-        platform: 'instagram',
-        accountName: '@your_account',
-        accountId: instagramForm.businessAccountId,
-        appId: instagramForm.appId,
-        appSecret: instagramForm.appSecret,
-        businessAccountId: instagramForm.businessAccountId,
-        facebookPageId: instagramForm.facebookPageId,
-        accessToken: instagramForm.accessToken,
-      });
-      setShowInstagramForm(false);
-      setInstagramForm({ appId: '', appSecret: '', businessAccountId: '', facebookPageId: '', accessToken: '' });
+      await connectPlatform(platform);
     } catch (err) {
-      console.error('Failed to connect Instagram:', err);
+      console.error(`Failed to connect ${platform}:`, err);
     }
   };
 
-  // const handleLinkedInSubmit = () => {
-  //   // Simulate OAuth connection
-  //   const newConnection: Connection = {
-  //     id: Date.now().toString(),
-  //     platform: 'linkedin',
-  //     status: 'connected',
-  //     accountName: 'Your Company',
-  //     accountId: linkedInForm.organizationId,
-  //     connectedAt: new Date(),
-  //     lastSync: new Date(),
-  //     expiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000), // 60 days
-  //   };
-
-  //   setConnections([...connections.filter(c => c.platform !== 'linkedin'), newConnection]);
-  //   setShowLinkedInForm(false);
-  //   setLinkedInForm({
-  //     clientId: '',
-  //     clientSecret: '',
-  //     redirectUri: '',
-  //     organizationId: '',
-  //     accessToken: '',
-  //   });
-  // };
-
-  const getDaysUntilExpiry = (expiresAt?: Date) => {
+  const getDaysUntilExpiry = (expiresAt?: string) => {
     if (!expiresAt) return null;
     const now = new Date().getTime();
-    const days = Math.ceil((expiresAt.getTime() - now) / (1000 * 60 * 60 * 24));
-    return days;
+    const expiryTime = new Date(expiresAt).getTime();
+    const days = Math.ceil((expiryTime - now) / (1000 * 60 * 60 * 24));
+    return days > 0 ? days : 0;
   };
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      {isLoading && (
+      {(isLoading || isInitiating) && (
         <div className="fixed top-4 right-4 z-50 bg-white shadow-lg rounded-lg px-4 py-2 flex items-center gap-2 text-sm text-gray-600">
           <Loader2 size={16} className="animate-spin text-indigo-600" />
-          Syncing...
+          {isInitiating ? 'Connecting...' : 'Syncing...'}
         </div>
       )}
+
+      {error && (
+        <div className="fixed top-4 right-4 z-50 bg-red-50 border border-red-200 shadow-lg rounded-lg px-4 py-3 flex items-center gap-2 text-sm text-red-800 max-w-sm">
+          <AlertCircle size={16} className="text-red-600 flex-shrink-0" />
+          <div className="flex-1">{error.message}</div>
+          <button onClick={clearError} className="text-red-600 hover:text-red-800 ml-2">
+            ✕
+          </button>
+        </div>
+      )}
+
       <Sidebar />
 
       <div className="flex-1 flex flex-col">
         <Header
           title="Connected Accounts"
-          subtitle="Manage your social media integrations and API credentials"
+          subtitle="Manage your social media integrations with OAuth"
         />
 
         <main className="flex-1 p-8">
@@ -230,8 +188,8 @@ export const AccountsPage = () => {
                         {connection.expiresAt && (
                           <p className="mb-1">
                             <span className="font-medium">Expires in:</span>{' '}
-                            <span className={getDaysUntilExpiry(new Date(connection.expiresAt))! < 7 ? 'text-red-600 font-semibold' : ''}>
-                              {getDaysUntilExpiry(new Date(connection.expiresAt))} days
+                            <span className={getDaysUntilExpiry(connection.expiresAt)! < 7 ? 'text-red-600 font-semibold' : ''}>
+                              {getDaysUntilExpiry(connection.expiresAt)} days
                             </span>
                           </p>
                         )}
@@ -244,26 +202,18 @@ export const AccountsPage = () => {
                       )}
 
                       <div className="flex gap-2">
-                        {connection.status === 'error' ? (
-                          <button
-                            onClick={() => handleReconnect(connection.id)}
-                            className="flex-1 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white text-sm font-semibold py-2 px-3 rounded-lg hover:from-indigo-700 hover:to-indigo-800 transition-all flex items-center justify-center gap-2"
-                          >
-                            <RefreshCw size={14} />
-                            Reconnect
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleReconnect(connection.id)}
-                            className="flex-1 bg-white text-gray-700 text-sm font-semibold py-2 px-3 rounded-lg hover:bg-gray-100 transition-colors flex items-center justify-center gap-2 border border-gray-300"
-                          >
-                            <RefreshCw size={14} />
-                            Refresh
-                          </button>
-                        )}
+                        <button
+                          onClick={() => handleOAuthConnect(platform as 'facebook' | 'instagram' | 'linkedin')}
+                          disabled={isInitiating}
+                          className="flex-1 bg-white text-gray-700 text-sm font-semibold py-2 px-3 rounded-lg hover:bg-gray-100 transition-colors flex items-center justify-center gap-2 border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <RefreshCw size={14} />
+                          {connection.status === 'error' ? 'Reconnect' : 'Refresh'}
+                        </button>
                         <button
                           onClick={() => handleDisconnect(connection.id)}
-                          className="bg-white text-red-600 p-2 rounded-lg hover:bg-red-50 transition-colors border border-red-200"
+                          disabled={isLoading}
+                          className="bg-white text-red-600 p-2 rounded-lg hover:bg-red-50 transition-colors border border-red-200 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -271,11 +221,12 @@ export const AccountsPage = () => {
                     </div>
                   ) : (
                     <button
-                      onClick={() => handleConnectPlatform(platform)}
-                      className="w-full bg-gradient-to-r from-indigo-600 to-indigo-700 text-white font-semibold py-3 px-4 rounded-lg hover:from-indigo-700 hover:to-indigo-800 transition-all flex items-center justify-center gap-2"
+                      onClick={() => handleConnectPlatform(platform as 'facebook' | 'instagram' | 'linkedin')}
+                      disabled={isInitiating}
+                      className="w-full bg-gradient-to-r from-indigo-600 to-indigo-700 text-white font-semibold py-3 px-4 rounded-lg hover:from-indigo-700 hover:to-indigo-800 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Plus size={18} />
-                      Connect Account
+                      Connect {info.name}
                     </button>
                   )}
                 </Card>
@@ -283,9 +234,20 @@ export const AccountsPage = () => {
             })}
           </div>
 
+          {/* OAuth Info Alert */}
+          <Card className="p-4 mb-8 bg-blue-50 border border-blue-200">
+            <div className="flex gap-3">
+              <AlertCircle className="text-blue-600 flex-shrink-0 mt-0.5" size={20} />
+              <div>
+                <h3 className="font-semibold text-blue-900 mb-1">OAuth Authentication</h3>
+                <p className="text-sm text-blue-800">
+                  Your connections use OAuth 2.0 for secure authorization. Tokens are automatically managed and refreshed. Manual credential entry is available as a fallback for Instagram.
+                </p>
+              </div>
+            </div>
+          </Card>
 
-
-          {/* Instagram Connection Form Modal */}
+          {/* Instagram Connection Form Modal (Fallback) */}
           {showInstagramForm && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
               <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
@@ -296,7 +258,7 @@ export const AccountsPage = () => {
                     </div>
                     <div>
                       <h2 className="text-2xl font-bold text-gray-900">Connect Instagram</h2>
-                      <p className="text-sm text-gray-600">Instagram Graph API Configuration</p>
+                      <p className="text-sm text-gray-600">Choose your connection method</p>
                     </div>
                   </div>
                   <button
@@ -308,95 +270,59 @@ export const AccountsPage = () => {
                 </div>
 
                 <div className="space-y-4">
-                  {/* Facebook App Credentials */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Facebook App ID *
-                    </label>
-                    <input
-                      type="text"
-                      value={instagramForm.appId}
-                      onChange={(e) => setInstagramForm({ ...instagramForm, appId: e.target.value })}
-                      placeholder="Enter your Facebook App ID"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Facebook App Secret *
-                    </label>
-                    <input
-                      type="password"
-                      value={instagramForm.appSecret}
-                      onChange={(e) => setInstagramForm({ ...instagramForm, appSecret: e.target.value })}
-                      placeholder="Enter your Facebook App Secret"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  {/* Instagram Business Account */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Instagram Business Account ID *
-                    </label>
-                    <input
-                      type="text"
-                      value={instagramForm.businessAccountId}
-                      onChange={(e) => setInstagramForm({ ...instagramForm, businessAccountId: e.target.value })}
-                      placeholder="Enter your Instagram Business Account ID"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    />
-                    <p className="text-xs text-gray-600 mt-1">
-                      Find this in your Facebook Business Manager
-                    </p>
-                  </div>
-
-                  {/* Facebook Page */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Facebook Page ID *
-                    </label>
-                    <input
-                      type="text"
-                      value={instagramForm.facebookPageId}
-                      onChange={(e) => setInstagramForm({ ...instagramForm, facebookPageId: e.target.value })}
-                      placeholder="Enter your Facebook Page ID"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    />
-                    <p className="text-xs text-gray-600 mt-1">
-                      The Facebook Page linked to your Instagram Business Account
-                    </p>
-                  </div>
-
-                  {/* Access Token */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Long-Lived Access Token *
-                    </label>
-                    <textarea
-                      value={instagramForm.accessToken}
-                      onChange={(e) => setInstagramForm({ ...instagramForm, accessToken: e.target.value })}
-                      placeholder="Paste your long-lived access token here"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none font-mono text-sm"
-                      rows={3}
-                    />
-                    <p className="text-xs text-gray-600 mt-1">
-                      Generate a long-lived token (60 days) using Facebook's Graph API Explorer
-                    </p>
-                  </div>
-
-                  {/* OAuth Alternative */}
-                  <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
-                    <p className="text-sm text-indigo-900 mb-3">
-                      <strong>Quick Setup:</strong> Skip manual configuration and connect via OAuth
+                  {/* OAuth Option */}
+                  <div className="border-2 border-indigo-200 rounded-lg p-6 bg-indigo-50">
+                    <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                      <CheckCircle2 className="text-green-600" size={20} />
+                      OAuth 2.0 (Recommended)
+                    </h3>
+                    <p className="text-sm text-gray-700 mb-4">
+                      Secure, automatic token management with no manual credentials needed
                     </p>
                     <button
-                      className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold py-3 px-4 rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all flex items-center justify-center gap-2"
+                      onClick={() => {
+                        setShowInstagramForm(false);
+                        handleOAuthConnect('instagram');
+                      }}
+                      disabled={isInitiating}
+                      className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold py-3 px-4 rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Link2 size={18} />
-                      Connect with Facebook OAuth
+                      {isInitiating ? 'Connecting...' : 'Connect with Facebook OAuth'}
                     </button>
+                  </div>
+
+                  {/* Manual Option */}
+                  <div className="border-2 border-gray-200 rounded-lg p-6">
+                    <h3 className="font-semibold text-gray-900 mb-2">Manual Configuration</h3>
+                    <p className="text-sm text-gray-700 mb-4">
+                      Enter your Instagram credentials manually (for advanced users)
+                    </p>
+
+                    {/* Form fields hidden by default */}
+                    <details className="space-y-4">
+                      <summary className="cursor-pointer font-medium text-indigo-600 hover:text-indigo-700">
+                        Show manual setup →
+                      </summary>
+
+                      <div className="space-y-4 pt-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Facebook App ID
+                          </label>
+                          <input
+                            type="text"
+                            value={instagramForm.appId}
+                            onChange={(e) => setInstagramForm({ ...instagramForm, appId: e.target.value })}
+                            placeholder="Your credentials are secure with OAuth"
+                            disabled
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
+                          />
+                          <p className="text-xs text-gray-600 mt-1">
+                            Manual credentials are deprecated. Use OAuth instead.
+                          </p>
+                        </div>
+                      </div>
+                    </details>
                   </div>
 
                   {/* Action Buttons */}
@@ -407,22 +333,11 @@ export const AccountsPage = () => {
                     >
                       Cancel
                     </button>
-                    <button
-                      onClick={handleInstagramSubmit}
-                      disabled={!instagramForm.appId || !instagramForm.appSecret || !instagramForm.businessAccountId || !instagramForm.facebookPageId}
-                      className="flex-1 bg-indigo-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-                    >
-                      Connect Instagram
-                    </button>
                   </div>
                 </div>
               </Card>
             </div>
           )}
-
-
-
-
         </main>
       </div>
     </div>

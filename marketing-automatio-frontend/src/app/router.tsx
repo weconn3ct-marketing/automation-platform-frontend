@@ -3,6 +3,8 @@ import { ErrorPage } from "./ErrorPage";
 import { ProtectedRoute, PublicRoute } from "../components/ProtectedRoute";
 import { LoginPage } from "../features/auth/LoginPage";
 import { SignupPage } from "../features/auth/SignupPage";
+import { OAuthSuccessPage } from "../features/auth/OAuthSuccessPage";
+import { OAuthErrorPage } from "../features/auth/OAuthErrorPage";
 import { DashboardPage } from "../features/dashboard/DashboardPage";
 import { LandingPage } from "../features/landing/LandingPage";
 import { CreatePostPage } from "../features/posts/CreatePostPage";
@@ -71,7 +73,25 @@ export const router = createBrowserRouter([
     errorElement: <ErrorPage /> 
   },
   { 
-    path: "/dashboard/accounts", 
+    path: "/auth/oauth-success", 
+    element: (
+      <ProtectedRoute>
+        <OAuthSuccessPage />
+      </ProtectedRoute>
+    ), 
+    errorElement: <ErrorPage /> 
+  },
+  { 
+    path: "/auth/oauth-error", 
+    element: (
+      <ProtectedRoute>
+        <OAuthErrorPage />
+      </ProtectedRoute>
+    ), 
+    errorElement: <ErrorPage /> 
+  },
+  { 
+    path: "/dashboard/accounts",
     element: (
       <ProtectedRoute>
         <AccountsPage />
