@@ -93,12 +93,12 @@ apiClient.interceptors.response.use(
 
       try {
         // Use a plain axios call to avoid the interceptor re-running on this request
-        const response = await axios.post<ApiResponse<{ token: string; refreshToken: string }>>(
+        const response = await axios.post<ApiResponse<{ accessToken: string; refreshToken: string }>>(
           `${API_BASE_URL}/auth/refresh`,
           { refreshToken }
         );
 
-        const { token: newToken, refreshToken: newRefreshToken } = response.data.data;
+        const { accessToken: newToken, refreshToken: newRefreshToken } = response.data.data;
 
         authStorage.setToken(newToken);
         localStorage.setItem('refresh_token', newRefreshToken);
