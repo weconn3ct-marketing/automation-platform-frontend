@@ -8,6 +8,10 @@ export interface OAuthAuthorizeResponse {
   };
 }
 
+export interface OAuthInitiateOptions {
+  redirectUri?: string;
+}
+
 export interface OAuthCallbackResponse {
   success: boolean;
   data: {
@@ -35,10 +39,16 @@ export const oauthService = {
    * @param platform - 'facebook' | 'instagram' | 'linkedin'
    * @returns Authorization URL and CSRF state token
    */
-  initiateOAuth: async (platform: 'facebook' | 'instagram' | 'linkedin') => {
+  initiateOAuth: async (
+    platform: 'facebook' | 'instagram' | 'linkedin',
+    options: OAuthInitiateOptions = {}
+  ) => {
     try {
       const response = await api.post<OAuthAuthorizeResponse>(
-        `/oauth/authorize/${platform}`
+        `/oauth/authorize/${platform}`,
+        {
+          redirectUri: options.redirectUri,
+        }
       );
       return response.data;
     } catch (error: any) {
