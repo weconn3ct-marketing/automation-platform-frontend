@@ -14,40 +14,41 @@ export const OAuthSuccessPage = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const handleCallback = async () => {
-      try {
-        const connectionId = searchParams.get('connectionId');
-        const platform = searchParams.get('platform');
+    const handleCallback = () => {
+      const callback = oauthService.isOAuthCallback(searchParams);
+      const errorCallback = oauthService.isOAuthError(searchParams);
 
-        if (!connectionId || !platform) {
-          setError('Invalid OAuth callback: missing connection details');
-          return;
-        }
-
-        // Fetch connection details
-        const response = await oauthService.handleCallback(connectionId);
-
-        if (response.success) {
-          setConnection({
-            id: response.data.connectionId,
-            platform: response.data.platform as any,
-            status: 'connected',
-            accountName: response.data.accountName,
-          });
-
-          // Auto-redirect after 3 seconds
-          setTimeout(() => {
-            navigate('/dashboard/accounts', { replace: true });
-          }, 3000);
-        }
-      } catch (err: any) {
-        setError(err.message || 'Failed to complete OAuth connection');
-      } finally {
+      if (errorCallback) {
+        setError(errorCallback.message);
         setIsLoading(false);
+        return;
       }
+
+      if (!callback) {
+        setError('Invalid OAuth callback: missing connection details');
+        setIsLoading(false);
+        return;
+      }
+
+      setConnection({
+        id: callback.connectionId,
+        platform: callback.platform as Connection['platform'],
+        status: 'connected',
+        accountName: searchParams.get('accountName') || `${callback.platform} account`,
+      });
+
+      const redirectTimer = window.setTimeout(() => {
+        navigate('/dashboard/accounts', { replace: true });
+      }, 3000);
+
+      setIsLoading(false);
+
+      return () => window.clearTimeout(redirectTimer);
     };
 
-    handleCallback();
+    const cleanup = handleCallback();
+
+    return cleanup;
   }, [searchParams, navigate]);
 
   return (

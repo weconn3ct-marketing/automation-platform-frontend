@@ -35,7 +35,9 @@ export const useOAuth = (): UseOAuthReturn => {
       setError(null);
 
       try {
-        const response = await oauthService.initiateOAuth(platform);
+        const response = await oauthService.initiateOAuth(platform, {
+          redirectUri: `${window.location.origin}/auth/oauth-success`,
+        });
 
         if (response.success && response.data.authUrl) {
           // Redirect to OAuth provider
