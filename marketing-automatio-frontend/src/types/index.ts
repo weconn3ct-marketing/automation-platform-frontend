@@ -1,17 +1,20 @@
-// Platform types
+// ─── Platform & Status ───────────────────────────────────────────────────────
+
 export type Platform = 'instagram' | 'linkedin' | 'facebook' | 'instagram-feed' | 'instagram-reels';
 export type ConnectionStatus = 'connected' | 'disconnected' | 'error' | 'pending';
 export type PostStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'review';
 export type ContentType = 'text' | 'article' | 'carousel' | 'video' | 'image';
 export type ToneStyle = 'professional' | 'casual' | 'friendly' | 'formal' | 'creative' | 'humorous';
 
-// User & Auth types
+// ─── User & Auth ─────────────────────────────────────────────────────────────
+
 export interface User {
   id: string;
   email: string;
   firstName?: string;
   lastName?: string;
   avatar?: string;
+  role?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -38,20 +41,35 @@ export interface AuthResponse {
   token: string;
 }
 
-// Connection types
+export interface UpdateProfileInput {
+  firstName?: string;
+  lastName?: string;
+  avatar?: string;
+}
+
+// ─── Connection ───────────────────────────────────────────────────────────────
+
 export interface Connection {
   id: string;
+  userId?: string;
   platform: Platform;
   status: ConnectionStatus;
   accountName?: string;
   accountId?: string;
   connectedAt?: string;
   lastSync?: string;
-  accessToken?: string;
-  refreshToken?: string;
+  /** Never returned from API — use hasAccessToken instead */
+  accessToken?: never;
+  /** Never returned from API — use hasRefreshToken instead */
+  refreshToken?: never;
+  hasAccessToken?: boolean;
+  hasRefreshToken?: boolean;
   expiresAt?: string;
   errorMessage?: string;
+  metadata?: Record<string, unknown>;
   oauthProvider?: 'facebook' | 'instagram' | 'linkedin';
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface InstagramConnectionForm {
@@ -70,7 +88,82 @@ export interface LinkedInConnectionForm {
   accessToken: string;
 }
 
-// Post types
+// ─── Social Posts (fetched from platforms) ───────────────────────────────────
+
+export interface SocialPost {
+  id: string;
+  userId: string;
+  connectionId: string;
+  platform: string;
+  platformPostId: string;
+  content: string | null;
+  caption: string | null;
+  mediaType: string | null;
+  mediaUrl: string | null;
+  thumbnailUrl: string | null;
+  permalink: string | null;
+  likeCount: number;
+  commentCount: number;
+  shareCount: number;
+  postedAt: string | null;
+  fetchedAt: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SyncResult {
+  platform: string;
+  status: 'success' | 'error' | 'skipped';
+  postsSynced: number;
+  error?: string;
+}
+
+export interface SyncResponse {
+  results: SyncResult[];
+  totalSynced: number;
+}
+
+// ─── Audit Log ────────────────────────────────────────────────────────────────
+
+export type AuditAction =
+  | 'ACCOUNT_CONNECT'
+  | 'ACCOUNT_DISCONNECT'
+  | 'ACCOUNT_RECONNECT'
+  | 'TOKEN_REFRESH'
+  | 'OAUTH_INITIATE'
+  | 'OAUTH_CALLBACK_SUCCESS'
+  | 'OAUTH_CALLBACK_ERROR'
+  | 'USER_LOGIN'
+  | 'USER_LOGOUT'
+  | 'USER_SIGNUP'
+  | 'USER_PROFILE_UPDATE'
+  | 'USER_ACCOUNT_DELETE'
+  | 'SOCIAL_POSTS_SYNC';
+
+export interface AuditLog {
+  id: string;
+  userId: string;
+  action: AuditAction;
+  platform?: string;
+  targetId?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface AuditSummary {
+  last30Days: {
+    connections: number;
+    disconnections: number;
+    syncs: number;
+  };
+  recentActivity: Pick<AuditLog, 'id' | 'action' | 'platform' | 'createdAt'>[];
+}
+
+// ─── Posts ────────────────────────────────────────────────────────────────────
+
 export interface PostEngagement {
   likes: number;
   comments: number;
@@ -132,7 +225,8 @@ export interface CreatePostInput {
   content?: string;
 }
 
-// API Response types
+// ─── API Response wrappers ────────────────────────────────────────────────────
+
 export interface ApiResponse<T> {
   success: boolean;
   data: T;
@@ -156,7 +250,8 @@ export interface PaginatedResponse<T> {
   };
 }
 
-// Metrics types
+// ─── Dashboard & Analytics ────────────────────────────────────────────────────
+
 export interface DashboardMetrics {
   scheduledPosts: number;
   pendingApprovals: number;
