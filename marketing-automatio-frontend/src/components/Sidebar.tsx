@@ -1,15 +1,18 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, PlusCircle, Calendar, History, Link2, Settings, LogOut, ChevronRight, Zap } from 'lucide-react';
+import { Home, PlusCircle, Calendar, History, Link2, Settings, LogOut, ChevronRight, Zap, LayoutGrid, ClipboardList } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useToastStore } from '../store/toastStore';
 
 const menuItems = [
   { icon: Home, label: 'Dashboard', path: '/dashboard' },
   { icon: PlusCircle, label: 'Create Post', path: '/dashboard/create' },
+  { icon: LayoutGrid, label: 'Social Posts', path: '/dashboard/social-posts' },
   { icon: Calendar, label: 'Calendar', path: '/dashboard/calendar' },
   { icon: History, label: 'History', path: '/dashboard/history' },
   { icon: Link2, label: 'Accounts', path: '/dashboard/accounts' },
+  { icon: ClipboardList, label: 'Activity Log', path: '/dashboard/audit' },
 ];
+
 
 export const Sidebar = () => {
   const location = useLocation();

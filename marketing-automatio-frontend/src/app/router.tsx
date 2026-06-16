@@ -8,8 +8,10 @@ import { OAuthErrorPage } from "../features/auth/OAuthErrorPage";
 import { DashboardPage } from "../features/dashboard/DashboardPage";
 import { LandingPage } from "../features/landing/LandingPage";
 import { CreatePostPage } from "../features/posts/CreatePostPage";
+import { SocialPostsPage } from "../features/posts/SocialPostsPage";
 import { CalendarPage } from "../features/calendar/CalendarPage";
 import { HistoryPage } from "../features/history/HistoryPage";
+import { AuditLogPage } from "../features/history/AuditLogPage";
 import { AccountsPage } from "../features/accounts/AccountsPage";
 
 export const router = createBrowserRouter([
@@ -54,6 +56,15 @@ export const router = createBrowserRouter([
     ), 
     errorElement: <ErrorPage /> 
   },
+  {
+    path: "/dashboard/social-posts",
+    element: (
+      <ProtectedRoute>
+        <SocialPostsPage />
+      </ProtectedRoute>
+    ),
+    errorElement: <ErrorPage />,
+  },
   { 
     path: "/dashboard/calendar", 
     element: (
@@ -71,6 +82,15 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ), 
     errorElement: <ErrorPage /> 
+  },
+  {
+    path: "/dashboard/audit",
+    element: (
+      <ProtectedRoute>
+        <AuditLogPage />
+      </ProtectedRoute>
+    ),
+    errorElement: <ErrorPage />,
   },
   { 
     path: "/auth/oauth-success", 

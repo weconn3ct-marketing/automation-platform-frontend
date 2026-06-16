@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
 export { useOAuth } from './useOAuth';
+export { useSocialPosts } from './useSocialPosts';
+export { useAuditLogs, useAuditSummary } from './useAudit';
+export { useProfile } from './useProfile';
+
 
 interface DocumentTitleOptions {
   prefix?: string;
