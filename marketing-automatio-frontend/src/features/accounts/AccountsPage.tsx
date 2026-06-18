@@ -682,13 +682,7 @@ export const AccountsPage = () => {
         <div
           className={`fixed top-4 right-4 z-[100] flex items-start gap-3 px-5 py-3.5 rounded-xl shadow-xl max-w-sm text-sm font-medium transition-all animate-fade-in`}
           style={{
-            background: globalMessage?.type === 'success' || (!globalMessage && !oauthError)
-              ? '#f0fdf4'
-              : oauthError
-              ? '#fef2f2'
-              : globalMessage?.type === 'success'
-              ? '#f0fdf4'
-              : '#fef2f2',
+            background: oauthError || globalMessage?.type === 'error' ? '#fef2f2' : '#f0fdf4',
             border: oauthError || globalMessage?.type === 'error' ? '1px solid #fecaca' : '1px solid #bbf7d0',
             color: oauthError || globalMessage?.type === 'error' ? '#991b1b' : '#166534',
           }}
