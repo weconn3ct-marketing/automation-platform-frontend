@@ -102,7 +102,7 @@ export const OAuthSocialLoginCallback = () => {
             <p className="text-slate-400 mb-6 text-sm">
               {platform
                 ? `Welcome! You're now signed in with ${platform.charAt(0).toUpperCase() + platform.slice(1)}.`
-                : 'You're now signed in.'}
+                : "You're now signed in."}
             </p>
             <div className="flex items-center justify-center gap-2 text-slate-400 text-sm">
               <Loader2 size={16} className="animate-spin text-indigo-400" />
