@@ -6,12 +6,26 @@ import { useToastStore } from "../../store/toastStore";
 import { Input, PasswordInput } from "../../components/ui/Input";
 import { LoadingSpinner } from "../../components/ui/Loading";
 import { isValidEmail } from "../../lib/utils";
+import { useOAuth } from "../../hooks/useOAuth";
 
 type AuthMode = "login" | "signup";
 
 type AuthPageProps = {
   initialMode?: AuthMode;
 };
+
+// Social platform SVG icons
+const FacebookIcon = () => (
+  <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current" xmlns="http://www.w3.org/2000/svg">
+    <path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.792-4.697 4.533-4.697 1.312 0 2.686.236 2.686.236v2.97h-1.513c-1.491 0-1.956.93-1.956 1.886v2.267h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z" />
+  </svg>
+);
+
+const LinkedInIcon = () => (
+  <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current" xmlns="http://www.w3.org/2000/svg">
+    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+  </svg>
+);
 
 const AuthPage = ({ initialMode = "login" }: AuthPageProps) => {
   const [mode, setMode] = useState<AuthMode>(initialMode);
@@ -21,6 +35,7 @@ const AuthPage = ({ initialMode = "login" }: AuthPageProps) => {
   // Auth state
   const { login, signup, isLoading } = useAuthStore();
   const { success, error: showError } = useToastStore();
+  const { loginWithSocial, isInitiating, error: oauthError } = useOAuth();
   
   // Form state
   const [email, setEmail] = useState("");
@@ -164,6 +179,48 @@ const AuthPage = ({ initialMode = "login" }: AuthPageProps) => {
                   )}
                 </button>
               </form>
+
+              {/* Social login divider */}
+              <div className="mt-6">
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-slate-200" />
+                  </div>
+                  <div className="relative flex justify-center text-xs">
+                    <span className="bg-white px-3 text-slate-400 font-medium">or continue with</span>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  {/* Facebook social login */}
+                  <button
+                    id="social-login-facebook"
+                    type="button"
+                    onClick={() => loginWithSocial('facebook').catch((err: any) => showError(err.message || 'Failed to connect with Facebook'))}
+                    disabled={isLoading || isInitiating}
+                    className="flex items-center justify-center gap-2.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-[#1877F2] shadow-sm transition hover:bg-[#1877F2] hover:text-white hover:border-[#1877F2] disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isInitiating ? <LoadingSpinner size="sm" /> : <FacebookIcon />}
+                    Facebook
+                  </button>
+
+                  {/* LinkedIn social login */}
+                  <button
+                    id="social-login-linkedin"
+                    type="button"
+                    onClick={() => loginWithSocial('linkedin').catch((err: any) => showError(err.message || 'Failed to connect with LinkedIn'))}
+                    disabled={isLoading || isInitiating}
+                    className="flex items-center justify-center gap-2.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-[#0A66C2] shadow-sm transition hover:bg-[#0A66C2] hover:text-white hover:border-[#0A66C2] disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isInitiating ? <LoadingSpinner size="sm" /> : <LinkedInIcon />}
+                    LinkedIn
+                  </button>
+                </div>
+
+                {oauthError && (
+                  <p className="mt-3 text-center text-xs text-red-600">{oauthError.message}</p>
+                )}
+              </div>
 
               <div className="mt-6 text-center text-sm text-slate-500">
                 New here?{" "}

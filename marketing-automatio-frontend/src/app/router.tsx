@@ -5,6 +5,7 @@ import { LoginPage } from "../features/auth/LoginPage";
 import { SignupPage } from "../features/auth/SignupPage";
 import { OAuthSuccessPage } from "../features/auth/OAuthSuccessPage";
 import { OAuthErrorPage } from "../features/auth/OAuthErrorPage";
+import { OAuthSocialLoginCallback } from "../features/auth/OAuthSocialLoginCallback";
 import { DashboardPage } from "../features/dashboard/DashboardPage";
 import { LandingPage } from "../features/landing/LandingPage";
 import { CreatePostPage } from "../features/posts/CreatePostPage";
@@ -109,6 +110,12 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ), 
     errorElement: <ErrorPage /> 
+  },
+  {
+    // Public route — social login redirects here before user is authenticated
+    path: "/auth/social-login-callback",
+    element: <OAuthSocialLoginCallback />,
+    errorElement: <ErrorPage />,
   },
   { 
     path: "/dashboard/accounts",
