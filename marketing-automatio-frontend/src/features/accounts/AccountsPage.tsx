@@ -18,6 +18,7 @@ import {
   Clock,
   Zap,
   ExternalLink,
+  ShieldOff,
 } from 'lucide-react';
 import { useConnectionsStore } from '../../store/connectionsStore';
 import { useOAuth } from '../../hooks/useOAuth';
@@ -429,8 +430,10 @@ interface PlatformCardProps {
   onConnect: () => void;
   onDisconnect: () => void;
   onReconnect: () => void;
+  onRevoke: () => void;
   isLoading: boolean;
   isInitiating: boolean;
+  isRevoking: boolean;
 }
 
 function PlatformCard({
@@ -439,8 +442,10 @@ function PlatformCard({
   onConnect,
   onDisconnect,
   onReconnect,
+  onRevoke,
   isLoading,
   isInitiating,
+  isRevoking,
 }: PlatformCardProps) {
   const meta = PLATFORM_META[platform];
   const isConnected = !!connection;
@@ -533,7 +538,7 @@ function PlatformCard({
             )}
 
             {/* Action buttons */}
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button
                 id={`reconnect-${platform}`}
                 onClick={onReconnect}
@@ -542,6 +547,16 @@ function PlatformCard({
               >
                 <RefreshCw size={14} className={isInitiating ? 'animate-spin' : ''} />
                 {connection.status === 'error' ? 'Reconnect' : 'Refresh'}
+              </button>
+              <button
+                id={`revoke-${platform}`}
+                onClick={onRevoke}
+                disabled={isRevoking || isLoading}
+                title="Revoke OAuth access — clears stored tokens"
+                className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border border-amber-200 bg-white text-sm font-semibold text-amber-600 hover:bg-amber-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isRevoking ? <Loader2 size={14} className="animate-spin" /> : <ShieldOff size={14} />}
+                Revoke
               </button>
               <button
                 id={`disconnect-${platform}`}
@@ -599,7 +614,7 @@ export const AccountsPage = () => {
     createConnection,
   } = useConnectionsStore();
 
-  const { isInitiating, error: oauthError, connectPlatform, clearError } = useOAuth();
+  const { isInitiating, error: oauthError, connectPlatform, clearError, revokeAccess, isRevoking } = useOAuth();
 
   useEffect(() => {
     fetchConnections();
@@ -670,6 +685,16 @@ export const AccountsPage = () => {
       await connectPlatform(platform);
     } catch (err: any) {
       showMessage('error', err.message || `Failed to reconnect ${platform}`);
+    }
+  };
+
+  const handleRevoke = async (connectionId: string, platform: string) => {
+    if (!confirm(`Revoke OAuth access for your ${platform} account? This will clear stored tokens. You can reconnect at any time.`)) return;
+    try {
+      await revokeAccess(connectionId);
+      showMessage('success', `${platform} access revoked. Tokens have been cleared.`);
+    } catch (err: any) {
+      showMessage('error', err.message || `Failed to revoke ${platform} access`);
     }
   };
 
@@ -778,8 +803,12 @@ export const AccountsPage = () => {
                     connection && handleDisconnect(connection.id, PLATFORM_META[platform].name)
                   }
                   onReconnect={() => handleReconnect(platform)}
+                  onRevoke={() =>
+                    connection && handleRevoke(connection.id, PLATFORM_META[platform].name)
+                  }
                   isLoading={isLoading}
                   isInitiating={isInitiating}
+                  isRevoking={isRevoking}
                 />
               );
             })}
