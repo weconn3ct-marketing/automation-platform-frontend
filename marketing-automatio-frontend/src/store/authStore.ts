@@ -24,21 +24,21 @@ export const useAuthStore = create<AuthStore>()(
       login: async (credentials: LoginCredentials) => {
         set({ isLoading: true });
         try {
-          const response = await api.post<{ user: User; token: string; refreshToken: string }>(
+          const response = await api.post<{ user: User; accessToken: string; refreshToken: string }>(
             '/auth/login',
             credentials
           );
 
-          const { user, token, refreshToken } = response.data;
+          const { user, accessToken, refreshToken } = response.data;
 
-          authStorage.setToken(token);
+          authStorage.setToken(accessToken);
           authStorage.setUser(user);
           // Store refresh token for later rotation
           localStorage.setItem('refresh_token', refreshToken);
 
           set({
             user,
-            token,
+            token: accessToken,
             isAuthenticated: true,
             isLoading: false,
           });
@@ -51,20 +51,20 @@ export const useAuthStore = create<AuthStore>()(
       signup: async (credentials: SignupCredentials) => {
         set({ isLoading: true });
         try {
-          const response = await api.post<{ user: User; token: string; refreshToken: string }>(
+          const response = await api.post<{ user: User; accessToken: string; refreshToken: string }>(
             '/auth/signup',
             credentials
           );
 
-          const { user, token, refreshToken } = response.data;
+          const { user, accessToken, refreshToken } = response.data;
 
-          authStorage.setToken(token);
+          authStorage.setToken(accessToken);
           authStorage.setUser(user);
           localStorage.setItem('refresh_token', refreshToken);
 
           set({
             user,
-            token,
+            token: accessToken,
             isAuthenticated: true,
             isLoading: false,
           });
