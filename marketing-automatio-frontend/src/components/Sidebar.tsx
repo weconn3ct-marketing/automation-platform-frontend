@@ -11,6 +11,7 @@ const menuItems = [
   { icon: History, label: 'History', path: '/dashboard/history' },
   { icon: Link2, label: 'Accounts', path: '/dashboard/accounts' },
   { icon: ClipboardList, label: 'Activity Log', path: '/dashboard/audit' },
+  { icon: Settings, label: 'Settings', path: '/dashboard/settings' },
 ];
 
 
@@ -71,10 +72,14 @@ export const Sidebar = () => {
 
       {/* Bottom Section */}
       <div className="p-4 border-t border-gray-100 space-y-2">
-        {/* Settings */}
+        {/* Settings shortcut */}
         <button
-          onClick={() => navigate('/dashboard/accounts')}
-          className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-gray-600 hover:bg-indigo-100 hover:text-indigo-700 transition-all duration-200"
+          onClick={() => navigate('/dashboard/settings')}
+          className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-200 ${
+            location.pathname === '/dashboard/settings'
+              ? 'bg-gradient-to-r from-indigo-700 to-purple-700 text-white'
+              : 'text-gray-600 hover:bg-indigo-100 hover:text-indigo-700'
+          }`}
         >
           <Settings size={18} />
           <span className="font-medium text-sm">Settings</span>

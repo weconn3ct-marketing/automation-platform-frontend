@@ -14,6 +14,7 @@ import { CalendarPage } from "../features/calendar/CalendarPage";
 import { HistoryPage } from "../features/history/HistoryPage";
 import { AuditLogPage } from "../features/history/AuditLogPage";
 import { AccountsPage } from "../features/accounts/AccountsPage";
+import { SettingsPage } from "../features/settings/SettingsPage";
 
 export const router = createBrowserRouter([
   { 
@@ -125,5 +126,14 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ), 
     errorElement: <ErrorPage /> 
+  },
+  {
+    path: "/dashboard/settings",
+    element: (
+      <ProtectedRoute>
+        <SettingsPage />
+      </ProtectedRoute>
+    ),
+    errorElement: <ErrorPage />,
   },
 ]);
